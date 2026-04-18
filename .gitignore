@@ -1,0 +1,23 @@
+# ─── Runtime ─────────────────────────────────────────────────────────────────
+node_modules/
+dist/
+.env
+
+# ─── OS / Editor ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ─── Google credentials (never commit) ───────────────────────────────────────
+service-account.json
+*-service-account.json
+
+# ─── Supabase local dev ───────────────────────────────────────────────────────
+.supabase/
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+logs/

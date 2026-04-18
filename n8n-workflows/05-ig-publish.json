@@ -66,12 +66,13 @@
       "name": "Create Media Container",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [800, -100]
+      "position": [800, -100],
+      "onError": "continueErrorOutput"
     },
     {
-      "parameters": { "amount": 60, "unit": "seconds" },
-      "id": "wait-60",
-      "name": "Wait 60s (IG Processing)",
+      "parameters": { "amount": 15, "unit": "seconds" },
+      "id": "wait-15",
+      "name": "Wait 15s",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [1000, -100]
@@ -96,13 +97,11 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "string": [{ "value1": "={{ $json.status_code }}", "value2": "FINISHED" }]
-        }
+        "jsCode": "// Track attempts per container. Bail at 20 attempts (~5 min @ 15s).\nconst containerId = $('Create Media Container').item.json.id;\nconst status = $input.first().json.status_code ?? 'UNKNOWN';\nconst data = $getWorkflowStaticData('node');\nconst key = `ig_${containerId}`;\nconst attempts = (data[key] ?? 0) + 1;\ndata[key] = attempts;\n\nif (status === 'FINISHED') {\n  delete data[key];\n  return [[{ json: { status, attempts, containerId } }], [], []];\n}\nif (status === 'ERROR') {\n  delete data[key];\n  return [[], [], [{ json: { status, attempts, containerId, reason: 'ig_container_error' } }]];\n}\nif (attempts >= 20) {\n  delete data[key];\n  return [[], [], [{ json: { status, attempts, containerId, reason: 'timeout_5min' } }]];\n}\nreturn [[], [{ json: { status, attempts, containerId } }], []];"
       },
-      "id": "if-finished",
-      "name": "IF: FINISHED",
-      "type": "n8n-nodes-base.if",
+      "id": "branch-container",
+      "name": "Branch Container Status",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1400, -100]
     },
@@ -163,13 +162,35 @@
     },
     {
       "parameters": {
-        "jsCode": "// Check if container has been stuck for > 5 min — compare against start time\nconst startedAt = $('Create Media Container').item.json._startedAt ?? Date.now();\nconst elapsed = Date.now() - new Date(startedAt).getTime();\nif (elapsed > 5 * 60 * 1000) {\n  throw new Error('Container stuck > 5 min — aborting, reel stays ready for retry');\n}\nreturn $input.all();"
+        "url": "={{ $env.ALERT_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": {
+          "content": "🚨 **IG create-container FAILED** for reel `{{ $('Supabase: next_reel_to_publish()').item.json.id }}` ({{ $('Supabase: next_reel_to_publish()').item.json.hook }}). Reel stays `ready`; next cron will retry.\nError: {{ $json.error ?? JSON.stringify($json) }}"
+        }
       },
-      "id": "timeout-check",
-      "name": "Timeout Check",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1600, 0]
+      "id": "alert-container-failed",
+      "name": "Alert: Container Create Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 100]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ALERT_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": {
+          "content": "⚠️ **IG container timeout/error** for reel `{{ $('Supabase: next_reel_to_publish()').item.json.id }}` (status={{ $json.status }}, reason={{ $json.reason }}). Reel stays `ready`; next cron retries."
+        }
+      },
+      "id": "alert-container-timeout",
+      "name": "Alert: Container Timeout",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1600, 100]
     }
   ],
   "connections": {
@@ -182,16 +203,21 @@
       ]
     },
     "Load IG Token": { "main": [[{ "node": "Create Media Container", "type": "main", "index": 0 }]] },
-    "Create Media Container": { "main": [[{ "node": "Wait 60s (IG Processing)", "type": "main", "index": 0 }]] },
-    "Wait 60s (IG Processing)": { "main": [[{ "node": "Poll Container Status", "type": "main", "index": 0 }]] },
-    "Poll Container Status": { "main": [[{ "node": "IF: FINISHED", "type": "main", "index": 0 }]] },
-    "IF: FINISHED": {
+    "Create Media Container": {
       "main": [
-        [{ "node": "Publish Reel", "type": "main", "index": 0 }],
-        [{ "node": "Timeout Check", "type": "main", "index": 0 }]
+        [{ "node": "Wait 15s", "type": "main", "index": 0 }],
+        [{ "node": "Alert: Container Create Failed", "type": "main", "index": 0 }]
       ]
     },
-    "Timeout Check": { "main": [[{ "node": "Wait 60s (IG Processing)", "type": "main", "index": 0 }]] },
+    "Wait 15s": { "main": [[{ "node": "Poll Container Status", "type": "main", "index": 0 }]] },
+    "Poll Container Status": { "main": [[{ "node": "Branch Container Status", "type": "main", "index": 0 }]] },
+    "Branch Container Status": {
+      "main": [
+        [{ "node": "Publish Reel", "type": "main", "index": 0 }],
+        [{ "node": "Wait 15s", "type": "main", "index": 0 }],
+        [{ "node": "Alert: Container Timeout", "type": "main", "index": 0 }]
+      ]
+    },
     "Publish Reel": { "main": [[{ "node": "Supabase Update (posted)", "type": "main", "index": 0 }]] },
     "Supabase Update (posted)": { "main": [[{ "node": "Notify Posted", "type": "main", "index": 0 }]] }
   },
@@ -200,5 +226,5 @@
   "tags": ["reels-automation"],
   "triggerCount": 1,
   "updatedAt": "2026-04-18T00:00:00.000Z",
-  "versionId": "1"
+  "versionId": "2"
 }

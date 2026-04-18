@@ -12,8 +12,8 @@ import { createClient } from '@supabase/supabase-js';
 import { parseArgs } from 'util';
 
 const IG_API_BASE = 'https://graph.facebook.com/v21.0';
-const POLL_INTERVAL_MS = 30_000;
-const MAX_POLL_ATTEMPTS = 10; // 5 minutes max
+const POLL_INTERVAL_MS = 15_000;
+const MAX_POLL_ATTEMPTS = 20; // 5 minutes max (15s * 20)
 
 interface ReelRow {
   id: string;
@@ -101,25 +101,22 @@ export async function publishReel(
 ): Promise<PublishResult> {
   console.log(`[ig] Creating media container for reel ${reel.id}…`);
   const containerId = await createMediaContainer(accountId, accessToken, reel);
-  console.log(`[ig] Container: ${containerId}. Waiting 60s for IG processing…`);
-  await new Promise<void>(resolve => setTimeout(resolve, 60_000));
+  console.log(`[ig] Container: ${containerId}. Polling every 15s up to 5 min…`);
 
   let attempts = 0;
   let statusCode = '';
   while (statusCode !== 'FINISHED') {
+    await new Promise<void>(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
     statusCode = await pollContainerStatus(containerId, accessToken);
-    console.log(`[ig] Container status: ${statusCode}`);
+    attempts++;
+    console.log(`[ig] Container status (${attempts}/${MAX_POLL_ATTEMPTS}): ${statusCode}`);
 
     if (statusCode === 'ERROR') {
       throw new Error(`Container ${containerId} entered ERROR state`);
     }
 
-    if (statusCode !== 'FINISHED') {
-      attempts++;
-      if (attempts >= MAX_POLL_ATTEMPTS) {
-        throw new Error(`Container ${containerId} stuck after ${attempts} poll attempts`);
-      }
-      await new Promise<void>(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+    if (statusCode !== 'FINISHED' && attempts >= MAX_POLL_ATTEMPTS) {
+      throw new Error(`Container ${containerId} stuck after 5 min — will retry next cycle`);
     }
   }
 

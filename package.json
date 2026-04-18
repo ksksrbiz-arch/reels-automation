@@ -1,0 +1,31 @@
+{
+  "name": "reels-automation",
+  "version": "1.0.0",
+  "description": "Automated Instagram Reels pipeline for @keithjskaggs — generates, edits, and publishes 14 reels/week via Claude, Veo 3.1, Submagic, and IG Graph API.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "veo": "npx tsx scripts/veo-generator.ts",
+    "publish-reel": "npx tsx scripts/ig-publisher.ts",
+    "r2-upload": "npx tsx scripts/r2-upload.ts",
+    "token-refresh": "npx tsx scripts/ig-token-refresh.ts",
+    "admin": "npx tsx scripts/admin-cli.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@google/genai": "^1.0.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

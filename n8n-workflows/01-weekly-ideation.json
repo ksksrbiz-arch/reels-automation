@@ -1,0 +1,119 @@
+{
+  "name": "01-weekly-ideation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 18 * * 0" }]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron Trigger (Sun 6pm)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": {
+          "model": "claude-opus-4-7",
+          "max_tokens": 8000,
+          "system": "={{ $workflow.systemPrompt }}",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Generate this week's 14 reel concepts. Today is {{ $now.format('YYYY-MM-DD') }}. Distribute across pillars: 6 operator_wisdom, 4 build_in_public, 2 trades_to_tech, 2 pnw_identity. Return ONLY a JSON array, no preamble."
+            }
+          ]
+        }
+      },
+      "id": "claude-api",
+      "name": "HTTP Request (Claude API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract JSON array from Claude response\nconst text = $input.first().json.content[0].text;\n// Strip markdown fences if present\nconst cleaned = text.replace(/^```json\\n?|^```\\n?|```$/gm, '').trim();\nconst concepts = JSON.parse(cleaned);\nif (!Array.isArray(concepts) || concepts.length !== 14) {\n  throw new Error(`Expected 14 concepts, got ${Array.isArray(concepts) ? concepts.length : 'non-array'}`);\n}\nreturn concepts.map(c => ({ json: c }));"
+      },
+      "id": "parse-concepts",
+      "name": "Code (parse JSON)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 0]
+    },
+    {
+      "parameters": { "batchSize": 1, "options": {} },
+      "id": "split-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [600, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Assign scheduled_for: 2/day × 7 days, staggered 11am & 6pm PT (UTC-7)\n// Day 0 = Monday (next day after Sunday cron)\nconst item = $input.first().json;\nconst idx = $itemIndex; // 0-13\nconst dayOffset = Math.floor(idx / 2) + 1; // days from today (Mon-Sun)\nconst slotHour = idx % 2 === 0 ? 18 : 1;    // 11am PT = 18:00 UTC, 6pm PT = 01:00 UTC next day\nconst base = new Date();\nbase.setUTCDate(base.getUTCDate() + dayOffset);\nbase.setUTCHours(slotHour, 0, 0, 0);\nconst status = ['build_in_public', 'trades_to_tech'].includes(item.pillar) ? 'recording_needed' : 'draft';\nreturn [{ json: { ...item, scheduled_for: base.toISOString(), status } }];"
+      },
+      "id": "schedule-calc",
+      "name": "Schedule Calculator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 0]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "reels_queue",
+        "columns": "pillar,status,hook,script,text_overlay,caption,hashtags,broll_prompt,audio_suggestion,scheduled_for",
+        "additionalFields": {}
+      },
+      "id": "supabase-insert",
+      "name": "Supabase Insert",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1000, 0],
+      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ALERT_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": { "content": "⚠️ **01-weekly-ideation failed**: {{ $json.error }}" }
+      },
+      "id": "error-handler",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 200]
+    }
+  ],
+  "connections": {
+    "Cron Trigger (Sun 6pm)": { "main": [[{ "node": "HTTP Request (Claude API)", "type": "main", "index": 0 }]] },
+    "HTTP Request (Claude API)": { "main": [[{ "node": "Code (parse JSON)", "type": "main", "index": 0 }]] },
+    "Code (parse JSON)": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] },
+    "Split In Batches": { "main": [[{ "node": "Schedule Calculator", "type": "main", "index": 0 }]] },
+    "Schedule Calculator": { "main": [[{ "node": "Supabase Insert", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "errorWorkflow": "error-handler" },
+  "staticData": null,
+  "tags": ["reels-automation"],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-18T00:00:00.000Z",
+  "versionId": "1"
+}

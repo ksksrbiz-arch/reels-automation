@@ -1,0 +1,231 @@
+{
+  "name": "04-auto-edit-submagic",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "04-auto-edit",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=select * from reels_queue where id = '{{ $json.body.reel_id }}' limit 1"
+      },
+      "id": "fetch-reel",
+      "name": "Fetch Reel Row",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [200, 0],
+      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.pillar }}",
+              "operation": "regex",
+              "value2": "^(build_in_public|trades_to_tech)$"
+            }
+          ]
+        }
+      },
+      "id": "if-needs-recording",
+      "name": "IF: Needs Recording",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Use raw_clip_url for talking-head pillars\nreturn [{ json: { ...($input.first().json), video_url: $input.first().json.raw_clip_url } }];"
+      },
+      "id": "use-raw-clip",
+      "name": "Use Raw Clip",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, -100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Use broll_url for wisdom/identity pillars (Veo output, needs text burned in)\nreturn [{ json: { ...($input.first().json), video_url: $input.first().json.broll_url } }];"
+      },
+      "id": "use-broll",
+      "name": "Use B-roll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 100]
+    },
+    {
+      "parameters": {
+        "url": "https://api.submagic.co/v1/projects",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $env.SUBMAGIC_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": {
+          "video_url": "={{ $json.video_url }}",
+          "language": "en",
+          "template": "bold-white",
+          "auto_cut": true
+        }
+      },
+      "id": "submagic-submit",
+      "name": "Submagic Submit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 0]
+    },
+    {
+      "parameters": {
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "id": "wait-submagic",
+      "name": "Wait 60s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1000, 0]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.submagic.co/v1/projects/{{ $('Submagic Submit').item.json.project_id }}",
+        "method": "GET",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $env.SUBMAGIC_API_KEY }}" }
+          ]
+        }
+      },
+      "id": "submagic-poll",
+      "name": "Submagic Poll",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{ $json.status }}", "value2": "completed" }]
+        }
+      },
+      "id": "if-completed",
+      "name": "IF Completed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1400, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.output_url }}",
+        "method": "GET",
+        "responseFormat": "file"
+      },
+      "id": "download-final",
+      "name": "Download Final Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1600, -100]
+    },
+    {
+      "parameters": {
+        "url": "=https://{{ $env.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com/{{ $env.R2_BUCKET }}/final/{{ $('Fetch Reel Row').item.json.id }}.mp4",
+        "method": "PUT",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "content-type", "value": "video/mp4" }]
+        },
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data"
+      },
+      "id": "r2-upload-final",
+      "name": "R2 Upload Final",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1800, -100]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": "public",
+        "table": "reels_queue",
+        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $('Fetch Reel Row').item.json.id }}" }] },
+        "fieldsToSend": "defineBelow",
+        "dataToSend": {
+          "values": [
+            { "fieldId": "final_reel_url", "fieldValue": "={{ $env.R2_PUBLIC_BASE_URL }}/final/{{ $('Fetch Reel Row').item.json.id }}.mp4" },
+            { "fieldId": "status", "fieldValue": "ready" }
+          ]
+        }
+      },
+      "id": "supabase-update-ready",
+      "name": "Supabase Update (ready)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2000, -100],
+      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ALERT_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": {
+          "content": "✅ **Reel ready for review**: {{ $('Fetch Reel Row').item.json.hook }}\nScheduled: {{ $('Fetch Reel Row').item.json.scheduled_for }}"
+        }
+      },
+      "id": "notify-ready",
+      "name": "Notify Ready",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, -100]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[{ "node": "Fetch Reel Row", "type": "main", "index": 0 }]] },
+    "Fetch Reel Row": { "main": [[{ "node": "IF: Needs Recording", "type": "main", "index": 0 }]] },
+    "IF: Needs Recording": {
+      "main": [
+        [{ "node": "Use Raw Clip", "type": "main", "index": 0 }],
+        [{ "node": "Use B-roll", "type": "main", "index": 0 }]
+      ]
+    },
+    "Use Raw Clip": { "main": [[{ "node": "Submagic Submit", "type": "main", "index": 0 }]] },
+    "Use B-roll": { "main": [[{ "node": "Submagic Submit", "type": "main", "index": 0 }]] },
+    "Submagic Submit": { "main": [[{ "node": "Wait 60s", "type": "main", "index": 0 }]] },
+    "Wait 60s": { "main": [[{ "node": "Submagic Poll", "type": "main", "index": 0 }]] },
+    "Submagic Poll": { "main": [[{ "node": "IF Completed", "type": "main", "index": 0 }]] },
+    "IF Completed": {
+      "main": [
+        [{ "node": "Download Final Video", "type": "main", "index": 0 }],
+        [{ "node": "Wait 60s", "type": "main", "index": 0 }]
+      ]
+    },
+    "Download Final Video": { "main": [[{ "node": "R2 Upload Final", "type": "main", "index": 0 }]] },
+    "R2 Upload Final": { "main": [[{ "node": "Supabase Update (ready)", "type": "main", "index": 0 }]] },
+    "Supabase Update (ready)": { "main": [[{ "node": "Notify Ready", "type": "main", "index": 0 }]] }
+  },
+  "settings": {},
+  "staticData": null,
+  "tags": ["reels-automation"],
+  "triggerCount": 0,
+  "updatedAt": "2026-04-18T00:00:00.000Z",
+  "versionId": "1"
+}

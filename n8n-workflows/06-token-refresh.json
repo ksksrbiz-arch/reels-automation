@@ -1,0 +1,125 @@
+{
+  "name": "06-token-refresh",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 3 * * 0" }]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron Trigger (Sun 3am)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select * from api_tokens where id = 'ig_long_lived' limit 1"
+      },
+      "id": "load-token",
+      "name": "Load Current Token",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [200, 0],
+      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    },
+    {
+      "parameters": {
+        "url": "https://graph.instagram.com/refresh_access_token",
+        "method": "GET",
+        "sendQueryParameters": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "grant_type", "value": "ig_refresh_token" },
+            { "name": "access_token", "value": "={{ $json.token }}" }
+          ]
+        }
+      },
+      "id": "refresh-token",
+      "name": "Refresh IG Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst newToken = resp.access_token;\nconst expiresIn = resp.expires_in; // seconds\nconst expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();\nreturn [{ json: { new_token: newToken, expires_at: expiresAt } }];"
+      },
+      "id": "parse-token",
+      "name": "Parse Token Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 0]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": "public",
+        "table": "api_tokens",
+        "conflictColumns": "id",
+        "dataToSend": "defineBelow",
+        "fieldsToSend": {
+          "values": [
+            { "fieldId": "id", "fieldValue": "ig_long_lived" },
+            { "fieldId": "token", "fieldValue": "={{ $json.new_token }}" },
+            { "fieldId": "refreshed_at", "fieldValue": "={{ $now.toISOString() }}" },
+            { "fieldId": "expires_at", "fieldValue": "={{ $json.expires_at }}" }
+          ]
+        }
+      },
+      "id": "update-token",
+      "name": "Update Token in Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [800, 0],
+      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ALERT_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": {
+          "content": "🔑 **IG token refreshed** successfully. Expires: {{ $('Parse Token Response').item.json.expires_at }}"
+        }
+      },
+      "id": "notify-success",
+      "name": "Notify Success",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ALERT_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": {
+          "content": "🚨 **CRITICAL: IG token refresh FAILED** — manual intervention needed!\nError: {{ $json.error }}"
+        }
+      },
+      "id": "alert-failure",
+      "name": "Alert: Refresh Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [600, 200]
+    }
+  ],
+  "connections": {
+    "Cron Trigger (Sun 3am)": { "main": [[{ "node": "Load Current Token", "type": "main", "index": 0 }]] },
+    "Load Current Token": { "main": [[{ "node": "Refresh IG Token", "type": "main", "index": 0 }]] },
+    "Refresh IG Token": { "main": [[{ "node": "Parse Token Response", "type": "main", "index": 0 }]] },
+    "Parse Token Response": { "main": [[{ "node": "Update Token in Supabase", "type": "main", "index": 0 }]] },
+    "Update Token in Supabase": { "main": [[{ "node": "Notify Success", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "errorWorkflow": "alert-failure" },
+  "staticData": null,
+  "tags": ["reels-automation"],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-18T00:00:00.000Z",
+  "versionId": "1"
+}

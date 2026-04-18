@@ -1,0 +1,117 @@
+{
+  "name": "07-analytics-pull",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 23 * * *" }]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron Trigger (Daily 11pm)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select * from reels_queue where status='posted' and (last_metrics_pull is null or last_metrics_pull < now() - interval '4 hours') and posted_at > now() - interval '30 days' order by posted_at desc"
+      },
+      "id": "query-posted",
+      "name": "Query Posted Reels",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [200, 0],
+      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    },
+    {
+      "parameters": { "batchSize": 1, "options": {} },
+      "id": "split-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select token from api_tokens where id = 'ig_long_lived' limit 1"
+      },
+      "id": "load-token",
+      "name": "Load IG Token",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [600, 0],
+      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Split In Batches').item.json.ig_media_id }}/insights",
+        "method": "GET",
+        "sendQueryParameters": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "metric", "value": "plays,likes,comments,shares,saved,reach,total_interactions" },
+            { "name": "access_token", "value": "={{ $json.token }}" }
+          ]
+        }
+      },
+      "id": "fetch-insights",
+      "name": "Fetch IG Insights",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse IG insights response into flat metrics object\nconst data = $input.first().json.data ?? [];\nconst metrics = {};\nfor (const metric of data) {\n  metrics[metric.name] = metric.values?.[0]?.value ?? metric.value ?? 0;\n}\nreturn [{ json: {\n  views: metrics['plays'] ?? 0,\n  likes: metrics['likes'] ?? 0,\n  comments: metrics['comments'] ?? 0,\n  shares: metrics['shares'] ?? 0,\n  saves: metrics['saved'] ?? 0,\n  reach: metrics['reach'] ?? 0,\n  last_metrics_pull: new Date().toISOString()\n}}];"
+      },
+      "id": "parse-metrics",
+      "name": "Parse Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 0]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": "public",
+        "table": "reels_queue",
+        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $('Split In Batches').item.json.id }}" }] },
+        "fieldsToSend": "defineBelow",
+        "dataToSend": {
+          "values": [
+            { "fieldId": "views", "fieldValue": "={{ $json.views }}" },
+            { "fieldId": "likes", "fieldValue": "={{ $json.likes }}" },
+            { "fieldId": "comments", "fieldValue": "={{ $json.comments }}" },
+            { "fieldId": "shares", "fieldValue": "={{ $json.shares }}" },
+            { "fieldId": "saves", "fieldValue": "={{ $json.saves }}" },
+            { "fieldId": "reach", "fieldValue": "={{ $json.reach }}" },
+            { "fieldId": "last_metrics_pull", "fieldValue": "={{ $json.last_metrics_pull }}" }
+          ]
+        }
+      },
+      "id": "supabase-update",
+      "name": "Supabase Update (metrics)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1200, 0],
+      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    }
+  ],
+  "connections": {
+    "Cron Trigger (Daily 11pm)": { "main": [[{ "node": "Query Posted Reels", "type": "main", "index": 0 }]] },
+    "Query Posted Reels": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] },
+    "Split In Batches": { "main": [[{ "node": "Load IG Token", "type": "main", "index": 0 }]] },
+    "Load IG Token": { "main": [[{ "node": "Fetch IG Insights", "type": "main", "index": 0 }]] },
+    "Fetch IG Insights": { "main": [[{ "node": "Parse Metrics", "type": "main", "index": 0 }]] },
+    "Parse Metrics": { "main": [[{ "node": "Supabase Update (metrics)", "type": "main", "index": 0 }]] }
+  },
+  "settings": {},
+  "staticData": null,
+  "tags": ["reels-automation"],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-18T00:00:00.000Z",
+  "versionId": "1"
+}

@@ -1,0 +1,204 @@
+{
+  "name": "05-ig-publish",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "*/10 * * * *" }]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron Trigger (every 10 min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select * from next_reel_to_publish()"
+      },
+      "id": "next-reel",
+      "name": "Supabase: next_reel_to_publish()",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [200, 0],
+      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{ $items().length }}", "value2": 0, "operation": "equal" }]
+        }
+      },
+      "id": "if-no-rows",
+      "name": "IF: No Rows",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select token from api_tokens where id = 'ig_long_lived' limit 1"
+      },
+      "id": "load-token",
+      "name": "Load IG Token",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [600, -100],
+      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v21.0/{{ $env.IG_BUSINESS_ACCOUNT_ID }}/media",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": {
+          "media_type": "REELS",
+          "video_url": "={{ $('Supabase: next_reel_to_publish()').item.json.final_reel_url }}",
+          "caption": "={{ $('Supabase: next_reel_to_publish()').item.json.caption + '\\n\\n' + ($('Supabase: next_reel_to_publish()').item.json.hashtags ?? []).join(' ') }}",
+          "access_token": "={{ $('Load IG Token').item.json.token }}"
+        }
+      },
+      "id": "create-container",
+      "name": "Create Media Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, -100]
+    },
+    {
+      "parameters": { "amount": 60, "unit": "seconds" },
+      "id": "wait-60",
+      "name": "Wait 60s (IG Processing)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1000, -100]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Create Media Container').item.json.id }}",
+        "method": "GET",
+        "sendQueryParameters": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "fields", "value": "status_code" },
+            { "name": "access_token", "value": "={{ $('Load IG Token').item.json.token }}" }
+          ]
+        }
+      },
+      "id": "poll-container",
+      "name": "Poll Container Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, -100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{ $json.status_code }}", "value2": "FINISHED" }]
+        }
+      },
+      "id": "if-finished",
+      "name": "IF: FINISHED",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1400, -100]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v21.0/{{ $env.IG_BUSINESS_ACCOUNT_ID }}/media_publish",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": {
+          "creation_id": "={{ $('Create Media Container').item.json.id }}",
+          "access_token": "={{ $('Load IG Token').item.json.token }}"
+        }
+      },
+      "id": "publish-reel",
+      "name": "Publish Reel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1600, -200]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": "public",
+        "table": "reels_queue",
+        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $('Supabase: next_reel_to_publish()').item.json.id }}" }] },
+        "fieldsToSend": "defineBelow",
+        "dataToSend": {
+          "values": [
+            { "fieldId": "status", "fieldValue": "posted" },
+            { "fieldId": "posted_at", "fieldValue": "={{ $now.toISOString() }}" },
+            { "fieldId": "ig_media_id", "fieldValue": "={{ $json.id }}" }
+          ]
+        }
+      },
+      "id": "supabase-posted",
+      "name": "Supabase Update (posted)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1800, -200],
+      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ALERT_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": {
+          "content": "✅ **Posted**: {{ $('Supabase: next_reel_to_publish()').item.json.hook }}\nhttps://www.instagram.com/reel/{{ $('Publish Reel').item.json.id }}"
+        }
+      },
+      "id": "notify-posted",
+      "name": "Notify Posted",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, -200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if container has been stuck for > 5 min — compare against start time\nconst startedAt = $('Create Media Container').item.json._startedAt ?? Date.now();\nconst elapsed = Date.now() - new Date(startedAt).getTime();\nif (elapsed > 5 * 60 * 1000) {\n  throw new Error('Container stuck > 5 min — aborting, reel stays ready for retry');\n}\nreturn $input.all();"
+      },
+      "id": "timeout-check",
+      "name": "Timeout Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1600, 0]
+    }
+  ],
+  "connections": {
+    "Cron Trigger (every 10 min)": { "main": [[{ "node": "Supabase: next_reel_to_publish()", "type": "main", "index": 0 }]] },
+    "Supabase: next_reel_to_publish()": { "main": [[{ "node": "IF: No Rows", "type": "main", "index": 0 }]] },
+    "IF: No Rows": {
+      "main": [
+        [],
+        [{ "node": "Load IG Token", "type": "main", "index": 0 }]
+      ]
+    },
+    "Load IG Token": { "main": [[{ "node": "Create Media Container", "type": "main", "index": 0 }]] },
+    "Create Media Container": { "main": [[{ "node": "Wait 60s (IG Processing)", "type": "main", "index": 0 }]] },
+    "Wait 60s (IG Processing)": { "main": [[{ "node": "Poll Container Status", "type": "main", "index": 0 }]] },
+    "Poll Container Status": { "main": [[{ "node": "IF: FINISHED", "type": "main", "index": 0 }]] },
+    "IF: FINISHED": {
+      "main": [
+        [{ "node": "Publish Reel", "type": "main", "index": 0 }],
+        [{ "node": "Timeout Check", "type": "main", "index": 0 }]
+      ]
+    },
+    "Timeout Check": { "main": [[{ "node": "Wait 60s (IG Processing)", "type": "main", "index": 0 }]] },
+    "Publish Reel": { "main": [[{ "node": "Supabase Update (posted)", "type": "main", "index": 0 }]] },
+    "Supabase Update (posted)": { "main": [[{ "node": "Notify Posted", "type": "main", "index": 0 }]] }
+  },
+  "settings": {},
+  "staticData": null,
+  "tags": ["reels-automation"],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-18T00:00:00.000Z",
+  "versionId": "1"
+}

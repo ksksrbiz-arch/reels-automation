@@ -82,24 +82,23 @@
           "language": "en",
           "template": "bold-white",
           "auto_cut": true
-        }
+        },
+        "options": { "response": { "response": { "neverError": false } } }
       },
       "id": "submagic-submit",
       "name": "Submagic Submit",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [800, 0]
+      "position": [800, 0],
+      "onError": "continueErrorOutput"
     },
     {
-      "parameters": {
-        "amount": 60,
-        "unit": "seconds"
-      },
+      "parameters": { "amount": 60, "unit": "seconds" },
       "id": "wait-submagic",
       "name": "Wait 60s",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1000, 0]
+      "position": [1000, -50]
     },
     {
       "parameters": {
@@ -116,19 +115,18 @@
       "name": "Submagic Poll",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1200, 0]
+      "position": [1200, -50],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
-        "conditions": {
-          "string": [{ "value1": "={{ $json.status }}", "value2": "completed" }]
-        }
+        "jsCode": "// Track poll count in workflow staticData; bail to FFmpeg after 10 attempts (~10 min)\nconst key = `sm_${$('Fetch Reel Row').item.json.id}`;\nconst data = $getWorkflowStaticData('node');\nconst attempts = (data[key] ?? 0) + 1;\ndata[key] = attempts;\nconst status = $input.first().json.status;\nif (status === 'completed') {\n  delete data[key];\n  return [[{ json: $input.first().json }], [], []];\n}\nif (status === 'failed' || attempts >= 10) {\n  delete data[key];\n  return [[], [], [{ json: { reason: status === 'failed' ? 'submagic_failed' : 'submagic_timeout', attempts } }]];\n}\nreturn [[], [{ json: $input.first().json }], []];"
       },
-      "id": "if-completed",
-      "name": "IF Completed",
-      "type": "n8n-nodes-base.if",
+      "id": "branch-submagic",
+      "name": "Branch Submagic Status",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1400, 0]
+      "position": [1400, -50]
     },
     {
       "parameters": {
@@ -140,7 +138,7 @@
       "name": "Download Final Video",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1600, -100]
+      "position": [1600, -150]
     },
     {
       "parameters": {
@@ -158,7 +156,7 @@
       "name": "R2 Upload Final",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1800, -100]
+      "position": [1800, -150]
     },
     {
       "parameters": {
@@ -178,7 +176,7 @@
       "name": "Supabase Update (ready)",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [2000, -100],
+      "position": [2000, -150],
       "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
     },
     {
@@ -195,7 +193,84 @@
       "name": "Notify Ready",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2200, -100]
+      "position": [2200, -150]
+    },
+    {
+      "parameters": {
+        "command": "=set -euo pipefail\nSRC=\"{{ $('Fetch Reel Row').item.json.video_url ?? $('Fetch Reel Row').item.json.broll_url ?? $('Fetch Reel Row').item.json.raw_clip_url }}\"\nTXT=$(printf %q \"{{ ($('Fetch Reel Row').item.json.text_overlay ?? '').replace(/'/g, \"'\\\\''\") }}\")\nOUT=\"/tmp/{{ $('Fetch Reel Row').item.json.id }}_fallback.mp4\"\ncurl -fsSL \"$SRC\" -o /tmp/src_{{ $('Fetch Reel Row').item.json.id }}.mp4\nffmpeg -y -i /tmp/src_{{ $('Fetch Reel Row').item.json.id }}.mp4 \\\n  -vf \"drawtext=text=${TXT}:fontcolor=white:fontsize=64:box=1:boxcolor=black@0.5:boxborderw=16:x=(w-text_w)/2:y=h*0.82\" \\\n  -c:a copy -movflags +faststart \"$OUT\"\necho \"$OUT\""
+      },
+      "id": "ffmpeg-fallback",
+      "name": "FFmpeg Fallback (burn text)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1600, 150]
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/tmp/{{ $('Fetch Reel Row').item.json.id }}_fallback.mp4",
+        "options": {}
+      },
+      "id": "read-fallback-file",
+      "name": "Read Fallback File",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [1800, 150]
+    },
+    {
+      "parameters": {
+        "url": "=https://{{ $env.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com/{{ $env.R2_BUCKET }}/final/{{ $('Fetch Reel Row').item.json.id }}.mp4",
+        "method": "PUT",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "content-type", "value": "video/mp4" }]
+        },
+        "sendBody": true,
+        "bodyContentType": "binaryData",
+        "inputDataFieldName": "data"
+      },
+      "id": "r2-upload-fallback",
+      "name": "R2 Upload Fallback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 150]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": "public",
+        "table": "reels_queue",
+        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $('Fetch Reel Row').item.json.id }}" }] },
+        "fieldsToSend": "defineBelow",
+        "dataToSend": {
+          "values": [
+            { "fieldId": "final_reel_url", "fieldValue": "={{ $env.R2_PUBLIC_BASE_URL }}/final/{{ $('Fetch Reel Row').item.json.id }}.mp4" },
+            { "fieldId": "status", "fieldValue": "ready" },
+            { "fieldId": "notes", "fieldValue": "Edited via FFmpeg fallback (Submagic unavailable)." }
+          ]
+        }
+      },
+      "id": "supabase-update-fallback",
+      "name": "Supabase Update (ready, fallback)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2200, 150],
+      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ALERT_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": {
+          "content": "⚠️ **FFmpeg fallback used** for reel `{{ $('Fetch Reel Row').item.json.id }}` — Submagic unavailable. Reel is ready but captions are basic text-burn."
+        }
+      },
+      "id": "notify-fallback",
+      "name": "Notify Fallback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2400, 150]
     }
   ],
   "connections": {
@@ -209,23 +284,38 @@
     },
     "Use Raw Clip": { "main": [[{ "node": "Submagic Submit", "type": "main", "index": 0 }]] },
     "Use B-roll": { "main": [[{ "node": "Submagic Submit", "type": "main", "index": 0 }]] },
-    "Submagic Submit": { "main": [[{ "node": "Wait 60s", "type": "main", "index": 0 }]] },
+    "Submagic Submit": {
+      "main": [
+        [{ "node": "Wait 60s", "type": "main", "index": 0 }],
+        [{ "node": "FFmpeg Fallback (burn text)", "type": "main", "index": 0 }]
+      ]
+    },
     "Wait 60s": { "main": [[{ "node": "Submagic Poll", "type": "main", "index": 0 }]] },
-    "Submagic Poll": { "main": [[{ "node": "IF Completed", "type": "main", "index": 0 }]] },
-    "IF Completed": {
+    "Submagic Poll": {
+      "main": [
+        [{ "node": "Branch Submagic Status", "type": "main", "index": 0 }],
+        [{ "node": "FFmpeg Fallback (burn text)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Branch Submagic Status": {
       "main": [
         [{ "node": "Download Final Video", "type": "main", "index": 0 }],
-        [{ "node": "Wait 60s", "type": "main", "index": 0 }]
+        [{ "node": "Wait 60s", "type": "main", "index": 0 }],
+        [{ "node": "FFmpeg Fallback (burn text)", "type": "main", "index": 0 }]
       ]
     },
     "Download Final Video": { "main": [[{ "node": "R2 Upload Final", "type": "main", "index": 0 }]] },
     "R2 Upload Final": { "main": [[{ "node": "Supabase Update (ready)", "type": "main", "index": 0 }]] },
-    "Supabase Update (ready)": { "main": [[{ "node": "Notify Ready", "type": "main", "index": 0 }]] }
+    "Supabase Update (ready)": { "main": [[{ "node": "Notify Ready", "type": "main", "index": 0 }]] },
+    "FFmpeg Fallback (burn text)": { "main": [[{ "node": "Read Fallback File", "type": "main", "index": 0 }]] },
+    "Read Fallback File": { "main": [[{ "node": "R2 Upload Fallback", "type": "main", "index": 0 }]] },
+    "R2 Upload Fallback": { "main": [[{ "node": "Supabase Update (ready, fallback)", "type": "main", "index": 0 }]] },
+    "Supabase Update (ready, fallback)": { "main": [[{ "node": "Notify Fallback", "type": "main", "index": 0 }]] }
   },
   "settings": {},
   "staticData": null,
   "tags": ["reels-automation"],
   "triggerCount": 0,
   "updatedAt": "2026-04-18T00:00:00.000Z",
-  "versionId": "1"
+  "versionId": "2"
 }

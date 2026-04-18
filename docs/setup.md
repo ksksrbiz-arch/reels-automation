@@ -14,10 +14,10 @@ This guide walks through the one-time setup steps required before the pipeline r
 | 4 | Generate long-lived IG access token (60-day) for Creator account | Graph API Explorer | 10 min |
 | 5 | Enable Gemini API billing + request Veo 3.1 access | ai.google.dev | 20 min |
 | 6 | Create Anthropic API key | console.anthropic.com | 2 min |
-| 7 | Create Cloudflare R2 bucket `reels-media` + R2 API token | Cloudflare dash | 5 min |
+| 7 | Create Cloudflare R2 bucket `reels-media` + R2 API token + custom domain `media.1commerce.online` with public access enabled (IG requires public HTTPS URLs, not signed/private) | Cloudflare dash | 15 min |
 | 8 | Create Submagic account + API key (optional, $16/mo) | submagic.co | 5 min |
 | 9 | Confirm n8n running on Contabo w/ HTTPS webhook URL | Contabo SSH | verify |
-| 10 | Create Google Drive folder `1commerce-reels-inbox` + service account | Google Cloud Console | 15 min |
+| 10 | Create Google Drive folder `1commerce-reels-inbox` + service account. **Explicitly share the folder** with the service account email — inherited permissions do NOT work. | Google Cloud Console | 15 min |
 
 ---
 

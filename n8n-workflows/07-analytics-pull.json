@@ -61,7 +61,8 @@
       "name": "Fetch IG Insights",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [800, 0]
+      "position": [800, 0],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -98,6 +99,20 @@
       "typeVersion": 1,
       "position": [1200, 0],
       "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ALERT_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": { "content": "⚠️ **IG Insights fetch failed** for reel `{{ $('Split In Batches').item.json.id }}` (ig_media_id={{ $('Split In Batches').item.json.ig_media_id }}): {{ $json.error ?? JSON.stringify($json) }}" }
+      },
+      "id": "alert-insights-failed",
+      "name": "Alert Insights Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 200]
     }
   ],
   "connections": {
@@ -105,7 +120,12 @@
     "Query Posted Reels": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] },
     "Split In Batches": { "main": [[{ "node": "Load IG Token", "type": "main", "index": 0 }]] },
     "Load IG Token": { "main": [[{ "node": "Fetch IG Insights", "type": "main", "index": 0 }]] },
-    "Fetch IG Insights": { "main": [[{ "node": "Parse Metrics", "type": "main", "index": 0 }]] },
+    "Fetch IG Insights": {
+      "main": [
+        [{ "node": "Parse Metrics", "type": "main", "index": 0 }],
+        [{ "node": "Alert Insights Failed", "type": "main", "index": 0 }]
+      ]
+    },
     "Parse Metrics": { "main": [[{ "node": "Supabase Update (metrics)", "type": "main", "index": 0 }]] }
   },
   "settings": {},

@@ -124,7 +124,8 @@
       "name": "R2 Upload",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1200, -200]
+      "position": [1200, -200],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -174,6 +175,20 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [400, 100]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ALERT_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "body": { "content": "🚨 **R2 upload failed** for reel `{{ $('Supabase Lookup').item.json.id }}`: {{ $json.error ?? JSON.stringify($json) }}" }
+      },
+      "id": "alert-r2-failed",
+      "name": "Alert R2 Upload Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, -50]
     }
   ],
   "connections": {
@@ -194,7 +209,12 @@
     "Move to Unmatched": { "main": [[{ "node": "Alert Unmatched", "type": "main", "index": 0 }]] },
     "Supabase Lookup": { "main": [[{ "node": "Download from Drive", "type": "main", "index": 0 }]] },
     "Download from Drive": { "main": [[{ "node": "R2 Upload", "type": "main", "index": 0 }]] },
-    "R2 Upload": { "main": [[{ "node": "Supabase Update (editing)", "type": "main", "index": 0 }]] },
+    "R2 Upload": {
+      "main": [
+        [{ "node": "Supabase Update (editing)", "type": "main", "index": 0 }],
+        [{ "node": "Alert R2 Upload Failed", "type": "main", "index": 0 }]
+      ]
+    },
     "Supabase Update (editing)": { "main": [[{ "node": "Trigger 04-auto-edit", "type": "main", "index": 0 }]] }
   },
   "settings": {},

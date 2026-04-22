@@ -16,10 +16,10 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "select * from reels_queue where status='draft' and broll_prompt is not null and scheduled_for < now() + interval '2 days' order by scheduled_for asc"
+        "query": "select * from reels_queue where status='approved' and broll_prompt is not null and scheduled_for < now() + interval '2 days' order by scheduled_for asc"
       },
       "id": "supabase-query",
-      "name": "Supabase Query (draft+broll)",
+      "name": "Supabase Query (approved+broll)",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [200, 0],
@@ -167,8 +167,8 @@
         "fieldsToSend": "defineBelow",
         "dataToSend": {
           "values": [
-            { "fieldId": "status", "fieldValue": "draft" },
-            { "fieldId": "notes", "fieldValue": "Veo generation failed; retrying next cycle." }
+             { "fieldId": "status", "fieldValue": "approved" },
+             { "fieldId": "notes", "fieldValue": "Veo generation failed after approval; retrying next cycle." }
           ]
         }
       },
@@ -195,8 +195,8 @@
     }
   ],
   "connections": {
-    "Cron Trigger (Daily 2am)": { "main": [[{ "node": "Supabase Query (draft+broll)", "type": "main", "index": 0 }]] },
-    "Supabase Query (draft+broll)": { "main": [[{ "node": "Cost Guard", "type": "main", "index": 0 }]] },
+     "Cron Trigger (Daily 2am)": { "main": [[{ "node": "Supabase Query (approved+broll)", "type": "main", "index": 0 }]] },
+     "Supabase Query (approved+broll)": { "main": [[{ "node": "Cost Guard", "type": "main", "index": 0 }]] },
     "Cost Guard": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] },
     "Split In Batches": { "main": [[{ "node": "HTTP Request (Veo Submit)", "type": "main", "index": 0 }]] },
     "HTTP Request (Veo Submit)": { "main": [[{ "node": "Wait 30s", "type": "main", "index": 0 }]] },

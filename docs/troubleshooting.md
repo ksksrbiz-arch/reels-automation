@@ -35,7 +35,7 @@ To raise the limit, update `VEO_MONTHLY_LIMIT` in n8n environment variables.
 
 **Symptom**: The poll loop runs more than 10 times without `done = true`.
 
-**Fix**: Check the Gemini API status page. Veo generation can take 3-8 minutes normally. If stuck > 15 min, the operation name may have expired. The error branch sets the reel back to `draft` for retry next cycle.
+**Fix**: Check the Gemini API status page. Veo generation can take 3-8 minutes normally. If stuck > 15 min, the operation name may have expired. The error branch keeps the reel in `approved` so it retries next cycle without needing another manual approval.
 
 ---
 

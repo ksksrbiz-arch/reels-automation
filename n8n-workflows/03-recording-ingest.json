@@ -12,8 +12,16 @@
       "name": "Google Drive Trigger",
       "type": "n8n-nodes-base.googleDriveTrigger",
       "typeVersion": 1,
-      "position": [0, 0],
-      "credentials": { "googleDriveOAuth2Api": { "id": "gdrive-cred", "name": "Google Drive OAuth2" } }
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "gdrive-cred",
+          "name": "Google Drive OAuth2"
+        }
+      }
     },
     {
       "parameters": {
@@ -31,7 +39,10 @@
       "name": "IF: Valid Video MIME",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [200, 0]
+      "position": [
+        200,
+        0
+      ]
     },
     {
       "parameters": {
@@ -41,19 +52,30 @@
       "name": "Parse Filename",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, -100]
+      "position": [
+        400,
+        -100
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "string": [{ "value1": "={{ $json._parse_error }}", "operation": "exists" }]
+          "string": [
+            {
+              "value1": "={{ $json._parse_error }}",
+              "operation": "exists"
+            }
+          ]
         }
       },
       "id": "if-parse-error",
       "name": "IF: Parse Error",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [600, -100]
+      "position": [
+        600,
+        -100
+      ]
     },
     {
       "parameters": {
@@ -66,8 +88,16 @@
       "name": "Move to Unmatched",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
-      "position": [800, 0],
-      "credentials": { "googleDriveOAuth2Api": { "id": "gdrive-cred", "name": "Google Drive OAuth2" } }
+      "position": [
+        800,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "gdrive-cred",
+          "name": "Google Drive OAuth2"
+        }
+      }
     },
     {
       "parameters": {
@@ -75,13 +105,18 @@
         "method": "POST",
         "sendBody": true,
         "bodyContentType": "json",
-        "body": { "content": "⚠️ **Unmatched recording**: `{{ $json.filename }}` has no reel_id prefix. Moved to `unmatched/`." }
+        "body": {
+          "content": "⚠️ **Unmatched recording**: `{{ $json.filename }}` has no reel_id prefix. Moved to `unmatched/`."
+        }
       },
       "id": "alert-unmatched",
       "name": "Alert Unmatched",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1000, 0]
+      "position": [
+        1000,
+        0
+      ]
     },
     {
       "parameters": {
@@ -92,8 +127,16 @@
       "name": "Supabase Lookup",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [800, -200],
-      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+      "position": [
+        800,
+        -200
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-cred",
+          "name": "Supabase API"
+        }
+      }
     },
     {
       "parameters": {
@@ -105,39 +148,68 @@
       "name": "Download from Drive",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
-      "position": [1000, -200],
-      "credentials": { "googleDriveOAuth2Api": { "id": "gdrive-cred", "name": "Google Drive OAuth2" } }
+      "position": [
+        1000,
+        -200
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "gdrive-cred",
+          "name": "Google Drive OAuth2"
+        }
+      }
     },
     {
       "parameters": {
-        "url": "=https://{{ $env.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com/{{ $env.R2_BUCKET }}/raw/{{ $('Supabase Lookup').item.json.id }}.mp4",
-        "method": "PUT",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [{ "name": "content-type", "value": "video/mp4" }]
-        },
-        "sendBody": true,
-        "bodyContentType": "binaryData",
-        "inputDataFieldName": "data"
+        "operation": "upload",
+        "bucketName": "={{ $env.R2_BUCKET }}",
+        "fileName": "=raw/{{ $('Supabase Lookup').item.json.id }}.mp4",
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "contentType": "video/mp4"
+        }
       },
       "id": "r2-upload",
       "name": "R2 Upload",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1200, -200],
-      "onError": "continueErrorOutput"
+      "type": "n8n-nodes-base.awsS3",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        -200
+      ],
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "aws": {
+          "id": "r2-cred",
+          "name": "Cloudflare R2"
+        }
+      }
     },
     {
       "parameters": {
         "operation": "update",
         "schema": "public",
         "table": "reels_queue",
-        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $('Supabase Lookup').item.json.id }}" }] },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Supabase Lookup').item.json.id }}"
+            }
+          ]
+        },
         "fieldsToSend": "defineBelow",
         "dataToSend": {
           "values": [
-            { "fieldId": "raw_clip_url", "fieldValue": "={{ $env.R2_PUBLIC_BASE_URL }}/raw/{{ $('Supabase Lookup').item.json.id }}.mp4" },
-            { "fieldId": "status", "fieldValue": "editing" }
+            {
+              "fieldId": "raw_clip_url",
+              "fieldValue": "={{ $env.R2_PUBLIC_BASE_URL }}/raw/{{ $('Supabase Lookup').item.json.id }}.mp4"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "editing"
+            }
           ]
         }
       },
@@ -145,8 +217,16 @@
       "name": "Supabase Update (editing)",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [1400, -200],
-      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+      "position": [
+        1400,
+        -200
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-cred",
+          "name": "Supabase API"
+        }
+      }
     },
     {
       "parameters": {
@@ -154,13 +234,18 @@
         "method": "POST",
         "sendBody": true,
         "bodyContentType": "json",
-        "body": { "reel_id": "={{ $('Supabase Lookup').item.json.id }}" }
+        "body": {
+          "reel_id": "={{ $('Supabase Lookup').item.json.id }}"
+        }
       },
       "id": "trigger-04",
       "name": "Trigger 04-auto-edit",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1600, -200]
+      "position": [
+        1600,
+        -200
+      ]
     },
     {
       "parameters": {
@@ -168,13 +253,18 @@
         "method": "POST",
         "sendBody": true,
         "bodyContentType": "json",
-        "body": { "content": "⚠️ **Invalid file type** in reels-inbox: `{{ $json.name }}` ({{ $json.mimeType }}). Skipped." }
+        "body": {
+          "content": "⚠️ **Invalid file type** in reels-inbox: `{{ $json.name }}` ({{ $json.mimeType }}). Skipped."
+        }
       },
       "id": "alert-invalid-mime",
       "name": "Alert Invalid MIME",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [400, 100]
+      "position": [
+        400,
+        100
+      ]
     },
     {
       "parameters": {
@@ -182,44 +272,147 @@
         "method": "POST",
         "sendBody": true,
         "bodyContentType": "json",
-        "body": { "content": "🚨 **R2 upload failed** for reel `{{ $('Supabase Lookup').item.json.id }}`: {{ $json.error ?? JSON.stringify($json) }}" }
+        "body": {
+          "content": "🚨 **R2 upload failed** for reel `{{ $('Supabase Lookup').item.json.id }}`: {{ $json.error ?? JSON.stringify($json) }}"
+        }
       },
       "id": "alert-r2-failed",
       "name": "Alert R2 Upload Failed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1400, -50]
+      "position": [
+        1400,
+        -50
+      ]
     }
   ],
   "connections": {
-    "Google Drive Trigger": { "main": [[{ "node": "IF: Valid Video MIME", "type": "main", "index": 0 }]] },
+    "Google Drive Trigger": {
+      "main": [
+        [
+          {
+            "node": "IF: Valid Video MIME",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "IF: Valid Video MIME": {
       "main": [
-        [{ "node": "Parse Filename", "type": "main", "index": 0 }],
-        [{ "node": "Alert Invalid MIME", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Parse Filename",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Invalid MIME",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Parse Filename": { "main": [[{ "node": "IF: Parse Error", "type": "main", "index": 0 }]] },
+    "Parse Filename": {
+      "main": [
+        [
+          {
+            "node": "IF: Parse Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "IF: Parse Error": {
       "main": [
-        [{ "node": "Move to Unmatched", "type": "main", "index": 0 }],
-        [{ "node": "Supabase Lookup", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Move to Unmatched",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Move to Unmatched": { "main": [[{ "node": "Alert Unmatched", "type": "main", "index": 0 }]] },
-    "Supabase Lookup": { "main": [[{ "node": "Download from Drive", "type": "main", "index": 0 }]] },
-    "Download from Drive": { "main": [[{ "node": "R2 Upload", "type": "main", "index": 0 }]] },
+    "Move to Unmatched": {
+      "main": [
+        [
+          {
+            "node": "Alert Unmatched",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Lookup": {
+      "main": [
+        [
+          {
+            "node": "Download from Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download from Drive": {
+      "main": [
+        [
+          {
+            "node": "R2 Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "R2 Upload": {
       "main": [
-        [{ "node": "Supabase Update (editing)", "type": "main", "index": 0 }],
-        [{ "node": "Alert R2 Upload Failed", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Supabase Update (editing)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert R2 Upload Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Supabase Update (editing)": { "main": [[{ "node": "Trigger 04-auto-edit", "type": "main", "index": 0 }]] }
+    "Supabase Update (editing)": {
+      "main": [
+        [
+          {
+            "node": "Trigger 04-auto-edit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "settings": {},
   "staticData": null,
-  "tags": ["reels-automation"],
+  "tags": [
+    "reels-automation"
+  ],
   "triggerCount": 1,
   "updatedAt": "2026-04-18T00:00:00.000Z",
   "versionId": "1"

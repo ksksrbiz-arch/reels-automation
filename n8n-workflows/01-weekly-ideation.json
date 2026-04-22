@@ -4,14 +4,22 @@
     {
       "parameters": {
         "rule": {
-          "interval": [{ "field": "cronExpression", "expression": "0 18 * * 0" }]
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 18 * * 0"
+            }
+          ]
         }
       },
       "id": "cron-trigger",
       "name": "Cron Trigger (Sun 6pm)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -20,9 +28,18 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
-            { "name": "anthropic-version", "value": "2023-06-01" },
-            { "name": "content-type", "value": "application/json" }
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
@@ -30,7 +47,7 @@
         "body": {
           "model": "claude-opus-4-7",
           "max_tokens": 8000,
-          "system": "={{ $workflow.systemPrompt }}",
+          "system": "={{ $('Load System Prompt').item.json.systemPrompt }}",
           "messages": [
             {
               "role": "user",
@@ -43,7 +60,10 @@
       "name": "HTTP Request (Claude API)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [200, 0]
+      "position": [
+        200,
+        0
+      ]
     },
     {
       "parameters": {
@@ -53,15 +73,24 @@
       "name": "Code (parse JSON)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, 0]
+      "position": [
+        400,
+        0
+      ]
     },
     {
-      "parameters": { "batchSize": 1, "options": {} },
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
       "id": "split-batches",
       "name": "Split In Batches",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [600, 0]
+      "position": [
+        600,
+        0
+      ]
     },
     {
       "parameters": {
@@ -71,7 +100,10 @@
       "name": "Schedule Calculator",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [800, 0]
+      "position": [
+        800,
+        0
+      ]
     },
     {
       "parameters": {
@@ -85,8 +117,16 @@
       "name": "Supabase Insert",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [1000, 0],
-      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+      "position": [
+        1000,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-cred",
+          "name": "Supabase API"
+        }
+      }
     },
     {
       "parameters": {
@@ -94,25 +134,108 @@
         "method": "POST",
         "sendBody": true,
         "bodyContentType": "json",
-        "body": { "content": "⚠️ **01-weekly-ideation failed**: {{ $json.error }}" }
+        "body": {
+          "content": "⚠️ **01-weekly-ideation failed**: {{ $json.error }}"
+        }
       },
       "id": "error-handler",
       "name": "Error Alert",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1200, 200]
+      "position": [
+        1200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const systemPrompt = \"You are generating 14 Instagram Reel concepts for Keith J. Skaggs Jr., 22yo solo founder of 1Commerce LLC.\\n\\nPOSITIONING: Ex-trades (worked in blue-collar trades until Oct 2025, then transitioned to software), now a self-taught operator building a commerce infrastructure empire from the Pacific Northwest. Philosophy: \\\"Cathedral Principle\\\" = building what outlasts you. Serious operator, PNW industrial aesthetic, 1Commerce LLC / UnifyOne.\\n\\nDISTRIBUTE CONCEPTS:\\n- 6 operator_wisdom: 7-15s, aspirational B-roll + on-screen quote, trending audio. Need broll_prompt.\\n- 4 build_in_public: 15-30s, screen recording or office talking-head. Recording needed. No broll_prompt.\\n- 2 trades_to_tech: 30-60s, story-driven talking-head. Recording needed. No broll_prompt.\\n- 2 pnw_identity: 5-10s, aesthetic B-roll only (industrial, rainy, drone, urban exploration, Cascade mountains). Need broll_prompt.\\n\\nHOOK PATTERNS (use these, reject \\\"Watch this\\\"/\\\"Wait for it\\\"):\\n1. Contradiction \\u2014 \\\"I run 6 companies at 22. I'm also terrified most days.\\\"\\n2. Hyper-specific relatability \\u2014 \\\"If you've ever opened Stripe at 2am on a Sunday...\\\"\\n3. Timeframe collapse \\u2014 \\\"6 months ago I was swinging a hammer. This morning I shipped a SaaS.\\\"\\n4. POV disguising advice \\u2014 \\\"POV: solo founder trying to register for GSA at 1am.\\\"\\n5. Bold claim + proof \\u2014 \\\"I built this in 3 weeks for $237. Here's the stack.\\\"\\n\\nOUTPUT: Return ONLY a JSON array of 14 objects. No markdown fences, no preamble. Each object:\\n{\\n  \\\"pillar\\\": \\\"operator_wisdom\\\" | \\\"build_in_public\\\" | \\\"trades_to_tech\\\" | \\\"pnw_identity\\\",\\n  \\\"hook\\\": \\\"First 3 seconds copy, max 12 words, one of the 5 patterns\\\",\\n  \\\"script\\\": \\\"Full voiceover or dialogue, matched to pillar duration\\\",\\n  \\\"text_overlay\\\": \\\"On-screen text (can be same as hook or supplementary)\\\",\\n  \\\"caption\\\": \\\"IG caption, 1-2 sentences ending in CTA or question. Max 180 chars.\\\",\\n  \\\"hashtags\\\": [\\\"5-8\\\", \\\"hashtags\\\", \\\"niche+broad mix\\\", \\\"avoid banned tags\\\"],\\n  \\\"broll_prompt\\\": \\\"For operator_wisdom and pnw_identity only. Cinematic visual description for Veo 3.1. 9:16 vertical. Include: subject, lighting, movement, lens language, mood. No text in video. NULL for talking-head pillars.\\\",\\n  \\\"audio_suggestion\\\": \\\"Vibe description for Keith to pick trending audio manually. e.g. 'moody lofi piano, 120bpm' or 'aggressive hip-hop build'\\\",\\n  \\\"duration_seconds\\\": 5-60\\n}\\n\\nCONSTRAINTS:\\n- No generic hustle-culture clich\\u00e9s (\\\"grind\\\", \\\"hustle harder\\\", \\\"no excuses\\\")\\n- No \\\"Millionaire mindset\\\" tropes\\n- Reference specific tech (Supabase, Stripe, Netlify, n8n) in build_in_public \\u2014 not vague \\\"building my business\\\"\\n- Trades-to-tech stories should feel grounded and specific, not inspirational platitudes\\n- PNW identity reels should evoke place, not people\\n\";\nreturn [{ json: { systemPrompt } }];"
+      },
+      "id": "load-system-prompt",
+      "name": "Load System Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        0
+      ]
     }
   ],
   "connections": {
-    "Cron Trigger (Sun 6pm)": { "main": [[{ "node": "HTTP Request (Claude API)", "type": "main", "index": 0 }]] },
-    "HTTP Request (Claude API)": { "main": [[{ "node": "Code (parse JSON)", "type": "main", "index": 0 }]] },
-    "Code (parse JSON)": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] },
-    "Split In Batches": { "main": [[{ "node": "Schedule Calculator", "type": "main", "index": 0 }]] },
-    "Schedule Calculator": { "main": [[{ "node": "Supabase Insert", "type": "main", "index": 0 }]] }
+    "Cron Trigger (Sun 6pm)": {
+      "main": [
+        [
+          {
+            "node": "Load System Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request (Claude API)": {
+      "main": [
+        [
+          {
+            "node": "Code (parse JSON)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code (parse JSON)": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Schedule Calculator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Calculator": {
+      "main": [
+        [
+          {
+            "node": "Supabase Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load System Prompt": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request (Claude API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "errorWorkflow": "error-handler" },
+  "settings": {
+    "errorWorkflow": "error-handler"
+  },
   "staticData": null,
-  "tags": ["reels-automation"],
+  "tags": [
+    "reels-automation"
+  ],
   "triggerCount": 1,
   "updatedAt": "2026-04-18T00:00:00.000Z",
   "versionId": "1"

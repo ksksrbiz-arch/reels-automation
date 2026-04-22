@@ -81,8 +81,17 @@ Or use the Supabase dashboard Table Editor.
 3. Configure credentials in n8n:
    - **Supabase API**: add your `SUPABASE_URL` and service role key
    - **Google Drive OAuth2**: authorize with the service account
+   - **Cloudflare R2 (AWS credential)**: In n8n go to **Credentials → New → AWS**. Fill in:
+     - *Access Key ID*: your R2 Access Key ID
+     - *Secret Access Key*: your R2 Secret Access Key
+     - *Region*: `auto`
+     - *Custom Endpoint*: `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`
+
+     Name it **Cloudflare R2** (the workflows reference it by that name). This credential is used by the B-roll, ingest, and edit workflows to upload videos with proper AWS Signature V4 authentication.
+
 4. Set environment variables in n8n Settings → Environment Variables:
    - `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_PUBLIC_BASE_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `SUBMAGIC_API_KEY`, `IG_BUSINESS_ACCOUNT_ID`, `ALERT_WEBHOOK_URL`, `VEO_MONTHLY_LIMIT`
+   - `N8N_WEBHOOK_URL_04_EDIT`: after activating `04-auto-edit-submagic`, open that workflow, click the **Webhook Trigger** node, copy the Production URL, and set it here. Then set the same value in your server `.env` file.
 5. Activate all 7 workflows
 
 ---

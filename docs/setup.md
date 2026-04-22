@@ -85,7 +85,7 @@ Or use the Supabase dashboard Table Editor.
      - *Access Key ID*: your R2 Access Key ID
      - *Secret Access Key*: your R2 Secret Access Key
      - *Region*: `auto`
-     - *Custom Endpoint*: `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`
+     - *Custom Endpoint*: `https://YOUR_R2_ACCOUNT_ID.r2.cloudflarestorage.com` (replace `YOUR_R2_ACCOUNT_ID` with your actual R2 Account ID)
 
      Name it **Cloudflare R2** (the workflows reference it by that name). This credential is used by the B-roll, ingest, and edit workflows to upload videos with proper AWS Signature V4 authentication.
 

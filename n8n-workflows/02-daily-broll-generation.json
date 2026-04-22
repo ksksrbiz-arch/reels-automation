@@ -145,26 +145,6 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.done }}",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "id": "if-done",
-      "name": "IF Done",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1400,
-        0
-      ]
-    },
-    {
-      "parameters": {
         "url": "={{ $json.response.videos[0].uri }}",
         "method": "GET",
         "responseFormat": "file"
@@ -213,7 +193,7 @@
             {
               "keyName": "id",
               "condition": "eq",
-              "keyValue": "={{ $('Split In Batches').item.json.id }}"
+              "keyValue": "={{ $json.reel_id }}"
             }
           ]
         },
@@ -222,15 +202,15 @@
           "values": [
             {
               "fieldId": "broll_url",
-              "fieldValue": "={{ $env.R2_PUBLIC_BASE_URL }}/broll/{{ $('Split In Batches').item.json.id }}.mp4"
-            },
-            {
-              "fieldId": "status",
-              "fieldValue": "=={{ ['operator_wisdom','pnw_identity'].includes($('Split In Batches').item.json.pillar) ? 'ready' : 'broll_ready' }}"
+              "fieldValue": "={{ $json.broll_url }}"
             },
             {
               "fieldId": "final_reel_url",
-              "fieldValue": "=={{ ['operator_wisdom','pnw_identity'].includes($('Split In Batches').item.json.pillar) ? $env.R2_PUBLIC_BASE_URL + '/broll/' + $('Split In Batches').item.json.id + '.mp4' : null }}"
+              "fieldValue": "={{ $json.final_reel_url }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
             }
           ]
         }
@@ -314,15 +294,28 @@
     },
     {
       "parameters": {
-        "jsCode": "// Cap Veo polling at 40 attempts (~20 min at 30s intervals)\nconst operationName = $('HTTP Request (Veo Submit)').item.json.name;\nconst key = 'veo_' + operationName;\nconst data = $getWorkflowStaticData('node');\nconst attempts = (data[key] ?? 0) + 1;\ndata[key] = attempts;\nconst MAX_ATTEMPTS = 40;\nif (attempts >= MAX_ATTEMPTS) {\n  delete data[key];\n  return [[], [{ json: { error: 'Veo timed out after ' + attempts + ' polls (~20 min)', operationName } }]];\n}\nreturn [[{ json: { ...$input.first().json, _veo_poll_attempts: attempts } }], []];"
+        "jsCode": "// Poll result: check done flag and cap retries.\n// Output 0 = success (proceed to download), 1 = continue polling, 2 = timeout/error\nconst item = $input.first().json;\nconst operationName = $('HTTP Request (Veo Submit)').item.json.name;\nconst key = 'veo_' + operationName;\nconst data = $getWorkflowStaticData('node');\n\nif (item.done === true) {\n  delete data[key]; // clean up counter on success\n  return [[{ json: item }], [], []];\n}\n\nconst attempts = (data[key] ?? 0) + 1;\ndata[key] = attempts;\nconst MAX_ATTEMPTS = 40; // 40 × 30s = ~20 min\nif (attempts >= MAX_ATTEMPTS) {\n  delete data[key];\n  return [[], [], [{ json: { error: 'Veo timed out after ' + attempts + ' polls (~20 min)', operationName } }]];\n}\nreturn [[], [{ json: { ...item, _veo_poll_attempts: attempts } }], []];"
       },
-      "id": "veo-poll-counter",
-      "name": "Veo Poll Counter",
+      "id": "veo-check-and-count",
+      "name": "IF Done / Poll Counter",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1600,
-        100
+        1400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $('Split In Batches').item.json;\nconst baseUrl = $env.R2_PUBLIC_BASE_URL;\nconst brollUrl = baseUrl + '/broll/' + item.id + '.mp4';\nconst isStandalone = ['operator_wisdom', 'pnw_identity'].includes(item.pillar);\nreturn [{ json: {\n  reel_id: item.id,\n  pillar: item.pillar,\n  broll_url: brollUrl,\n  final_reel_url: isStandalone ? brollUrl : null,\n  status: isStandalone ? 'ready' : 'broll_ready'\n} }];"
+      },
+      "id": "prepare-update-fields",
+      "name": "Prepare Update Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        -100
       ]
     }
   ],
@@ -397,25 +390,7 @@
       "main": [
         [
           {
-            "node": "IF Done",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IF Done": {
-      "main": [
-        [
-          {
-            "node": "Download Video",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Veo Poll Counter",
+            "node": "IF Done / Poll Counter",
             "type": "main",
             "index": 0
           }
@@ -437,15 +412,22 @@
       "main": [
         [
           {
-            "node": "Supabase Update (broll_url)",
+            "node": "Prepare Update Fields",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Veo Poll Counter": {
+    "IF Done / Poll Counter": {
       "main": [
+        [
+          {
+            "node": "Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Wait 30s",
@@ -456,6 +438,17 @@
         [
           {
             "node": "Supabase Update (error)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Update Fields": {
+      "main": [
+        [
+          {
+            "node": "Supabase Update (broll_url)",
             "type": "main",
             "index": 0
           }

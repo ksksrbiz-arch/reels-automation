@@ -35,7 +35,7 @@ To raise the limit, update `VEO_MONTHLY_LIMIT` in n8n environment variables.
 
 **Symptom**: The poll loop runs more than 10 times without `done = true`.
 
-**Fix**: Check the Gemini API status page. Veo generation can take 3-8 minutes normally. If stuck > 15 min, the operation name may have expired. The error branch sets the reel back to `draft` for retry next cycle.
+**Fix**: Check the Gemini API status page. Veo generation can take 3-8 minutes normally. If stuck > 15 min, the operation name may have expired. The error branch keeps the reel in `approved` so it retries next cycle without needing another manual approval.
 
 ---
 
@@ -48,6 +48,20 @@ To raise the limit, update `VEO_MONTHLY_LIMIT` in n8n environment variables.
 ```bash
 npx tsx scripts/admin-cli.ts list --status recording_needed
 ```
+
+> **Note**: The workflow moves the file to the folder identified by `GDRIVE_UNMATCHED_FOLDER_ID`. If this env var is not set the move node will fail — ensure you created the `unmatched` sub-folder inside the inbox and set its Drive folder ID as described in `setup.md §5`.
+
+---
+
+## 03-ingest: "Recording uploaded for unknown reel" alert
+
+**Symptom**: Alert fires: "Recording uploaded for unknown reel: `{filename}` has no matching row in reels_queue."
+
+**Cause**: The reel_id prefix in the filename was parsed correctly but no row with that ID exists in the database. The reel may have been killed, or the ID was mistyped in the filename.
+
+**Fix**:
+1. Run `npx tsx scripts/admin-cli.ts list` to find the correct reel_id
+2. Rename the file with the correct prefix and re-upload it to the Drive inbox
 
 ---
 

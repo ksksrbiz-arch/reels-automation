@@ -4,44 +4,69 @@
     {
       "parameters": {
         "rule": {
-          "interval": [{ "field": "cronExpression", "expression": "0 2 * * *" }]
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
         }
       },
       "id": "cron-trigger",
       "name": "Cron Trigger (Daily 2am)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "select * from reels_queue where status='draft' and broll_prompt is not null and scheduled_for < now() + interval '2 days' order by scheduled_for asc"
+        "query": "select * from reels_queue where status='approved' and broll_prompt is not null and scheduled_for < now() + interval '2 days' order by scheduled_for asc"
       },
       "id": "supabase-query",
-      "name": "Supabase Query (draft+broll)",
+      "name": "Supabase Query (approved+broll)",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [200, 0],
-      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+      "position": [
+        200,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-cred",
+          "name": "Supabase API"
+        }
+      }
     },
     {
       "parameters": {
-        "jsCode": "// Cost guard: abort if > VEO_MONTHLY_LIMIT generations this month\nconst limit = parseInt(process.env.VEO_MONTHLY_LIMIT ?? '25', 10);\nconst { createClient } = require('@supabase/supabase-js');\nconst sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);\nconst { count } = await sb\n  .from('reels_queue')\n  .select('id', { count: 'exact', head: true })\n  .not('broll_url', 'is', null)\n  .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());\nif ((count ?? 0) >= limit) {\n  throw new Error(`Monthly Veo limit of ${limit} reached (${count} generated). Aborting.`);\n}\nreturn $input.all();"
+        "jsCode": "// Cost guard: abort if >= VEO_MONTHLY_LIMIT B-roll generations this month.\n// Uses native fetch() (Node 18+) + Supabase REST API — no npm require() needed.\nconst limit = parseInt(process.env.VEO_MONTHLY_LIMIT ?? '25', 10);\nconst startOfMonth = new Date(\n  new Date().getFullYear(), new Date().getMonth(), 1\n).toISOString();\nconst countUrl =\n  `${process.env.SUPABASE_URL}/rest/v1/reels_queue` +\n  `?select=id&broll_url=not.is.null` +\n  `&created_at=gte.${encodeURIComponent(startOfMonth)}&limit=0`;\nconst res = await fetch(countUrl, {\n  headers: {\n    'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY,\n    'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,\n    'Prefer': 'count=exact',\n  }\n});\nif (!res.ok) {\n  // Fail open so a transient Supabase error doesn't block B-roll generation\n  console.warn('[cost-guard] Count query failed (' + res.status + '), proceeding anyway');\n  return $input.all();\n}\nconst contentRange = res.headers.get('content-range') ?? '*/0';\nconst count = parseInt(contentRange.split('/')[1] ?? '0', 10);\nif (count >= limit) {\n  throw new Error(`Monthly Veo limit of ${limit} reached (${count} generated). Aborting.`);\n}\nreturn $input.all();"
       },
       "id": "cost-guard",
       "name": "Cost Guard",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, 0]
+      "position": [
+        400,
+        0
+      ]
     },
     {
-      "parameters": { "batchSize": 1, "options": {} },
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
       "id": "split-batches",
       "name": "Split In Batches",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [600, 0]
+      "position": [
+        600,
+        0
+      ]
     },
     {
       "parameters": {
@@ -49,12 +74,21 @@
         "method": "POST",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "x-goog-api-key", "value": "={{ $env.GEMINI_API_KEY }}" }]
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            }
+          ]
         },
         "sendBody": true,
         "bodyContentType": "json",
         "body": {
-          "instances": [{ "prompt": "={{ $json.broll_prompt }}" }],
+          "instances": [
+            {
+              "prompt": "={{ $json.broll_prompt }}"
+            }
+          ],
           "parameters": {
             "aspectRatio": "9:16",
             "resolution": "1080p",
@@ -67,7 +101,10 @@
       "name": "HTTP Request (Veo Submit)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [800, 0]
+      "position": [
+        800,
+        0
+      ]
     },
     {
       "parameters": {
@@ -78,7 +115,10 @@
       "name": "Wait 30s",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1000, 0]
+      "position": [
+        1000,
+        0
+      ]
     },
     {
       "parameters": {
@@ -86,26 +126,22 @@
         "method": "GET",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "x-goog-api-key", "value": "={{ $env.GEMINI_API_KEY }}" }]
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            }
+          ]
         }
       },
       "id": "veo-poll",
       "name": "HTTP Request (Veo Poll)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1200, 0]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [{ "value1": "={{ $json.done }}", "value2": true }]
-        }
-      },
-      "id": "if-done",
-      "name": "IF Done",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [1400, 0]
+      "position": [
+        1200,
+        0
+      ]
     },
     {
       "parameters": {
@@ -117,37 +153,65 @@
       "name": "Download Video",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1600, -100]
+      "position": [
+        1600,
+        -100
+      ]
     },
     {
       "parameters": {
-        "url": "=https://{{ $env.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com/{{ $env.R2_BUCKET }}/broll/{{ $('Split In Batches').item.json.id }}.mp4",
-        "method": "PUT",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [{ "name": "content-type", "value": "video/mp4" }]
-        },
-        "sendBody": true,
-        "bodyContentType": "binaryData",
-        "inputDataFieldName": "data"
+        "operation": "upload",
+        "bucketName": "={{ $env.R2_BUCKET }}",
+        "fileName": "=broll/{{ $('Split In Batches').item.json.id }}.mp4",
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "contentType": "video/mp4"
+        }
       },
       "id": "r2-upload",
       "name": "R2 Upload",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1800, -100]
+      "type": "n8n-nodes-base.awsS3",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        -100
+      ],
+      "credentials": {
+        "aws": {
+          "id": "r2-cred",
+          "name": "Cloudflare R2"
+        }
+      }
     },
     {
       "parameters": {
         "operation": "update",
         "schema": "public",
         "table": "reels_queue",
-        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $('Split In Batches').item.json.id }}" }] },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.reel_id }}"
+            }
+          ]
+        },
         "fieldsToSend": "defineBelow",
         "dataToSend": {
           "values": [
-            { "fieldId": "broll_url", "fieldValue": "={{ $env.R2_PUBLIC_BASE_URL }}/broll/{{ $('Split In Batches').item.json.id }}.mp4" },
-            { "fieldId": "status", "fieldValue": "=={{ ['operator_wisdom','pnw_identity'].includes($('Split In Batches').item.json.pillar) ? 'ready' : 'broll_ready' }}" }
+            {
+              "fieldId": "broll_url",
+              "fieldValue": "={{ $json.broll_url }}"
+            },
+            {
+              "fieldId": "final_reel_url",
+              "fieldValue": "={{ $json.final_reel_url }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            }
           ]
         }
       },
@@ -155,20 +219,42 @@
       "name": "Supabase Update (broll_url)",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [2000, -100],
-      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+      "position": [
+        2000,
+        -100
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-cred",
+          "name": "Supabase API"
+        }
+      }
     },
     {
       "parameters": {
         "operation": "update",
         "schema": "public",
         "table": "reels_queue",
-        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $('Split In Batches').item.json.id }}" }] },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Split In Batches').item.json.id }}"
+            }
+          ]
+        },
         "fieldsToSend": "defineBelow",
         "dataToSend": {
           "values": [
-            { "fieldId": "status", "fieldValue": "draft" },
-            { "fieldId": "notes", "fieldValue": "Veo generation failed; retrying next cycle." }
+            {
+              "fieldId": "status",
+              "fieldValue": "approved"
+            },
+            {
+              "fieldId": "notes",
+              "fieldValue": "Veo generation failed after approval; retrying next cycle."
+            }
           ]
         }
       },
@@ -176,8 +262,16 @@
       "name": "Supabase Update (error)",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [1600, 100],
-      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+      "position": [
+        1600,
+        100
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-cred",
+          "name": "Supabase API"
+        }
+      }
     },
     {
       "parameters": {
@@ -185,35 +279,188 @@
         "method": "POST",
         "sendBody": true,
         "bodyContentType": "json",
-        "body": { "content": "⚠️ **Veo B-roll failed** for reel `{{ $('Split In Batches').item.json.id }}`: {{ $json.error }}" }
+        "body": {
+          "content": "⚠️ **Veo B-roll failed** for reel `{{ $('Split In Batches').item.json.id }}`: {{ $json.error }}"
+        }
       },
       "id": "error-alert",
       "name": "Error Alert",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1800, 100]
+      "position": [
+        1800,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Poll result: check done flag and cap retries.\n// Output 0 = success (proceed to download), 1 = continue polling, 2 = timeout/error\nconst item = $input.first().json;\nconst operationName = $('HTTP Request (Veo Submit)').item.json.name;\nconst key = 'veo_' + operationName;\nconst data = $getWorkflowStaticData('node');\n\nif (item.done === true) {\n  delete data[key]; // clean up counter on success\n  return [[{ json: item }], [], []];\n}\n\nconst attempts = (data[key] ?? 0) + 1;\ndata[key] = attempts;\nconst MAX_ATTEMPTS = 40; // 40 × 30s = ~20 min\nif (attempts >= MAX_ATTEMPTS) {\n  delete data[key];\n  return [[], [], [{ json: { error: 'Veo timed out after ' + attempts + ' polls (~20 min)', operationName } }]];\n}\nreturn [[], [{ json: { ...item, _veo_poll_attempts: attempts } }], []];"
+      },
+      "id": "veo-check-and-count",
+      "name": "IF Done / Poll Counter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $('Split In Batches').item.json;\nconst baseUrl = $env.R2_PUBLIC_BASE_URL;\nconst brollUrl = baseUrl + '/broll/' + item.id + '.mp4';\nconst isStandalone = ['operator_wisdom', 'pnw_identity'].includes(item.pillar);\nreturn [{ json: {\n  reel_id: item.id,\n  pillar: item.pillar,\n  broll_url: brollUrl,\n  final_reel_url: isStandalone ? brollUrl : null,\n  status: isStandalone ? 'ready' : 'broll_ready'\n} }];"
+      },
+      "id": "prepare-update-fields",
+      "name": "Prepare Update Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        -100
+      ]
     }
   ],
   "connections": {
-    "Cron Trigger (Daily 2am)": { "main": [[{ "node": "Supabase Query (draft+broll)", "type": "main", "index": 0 }]] },
-    "Supabase Query (draft+broll)": { "main": [[{ "node": "Cost Guard", "type": "main", "index": 0 }]] },
-    "Cost Guard": { "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]] },
-    "Split In Batches": { "main": [[{ "node": "HTTP Request (Veo Submit)", "type": "main", "index": 0 }]] },
-    "HTTP Request (Veo Submit)": { "main": [[{ "node": "Wait 30s", "type": "main", "index": 0 }]] },
-    "Wait 30s": { "main": [[{ "node": "HTTP Request (Veo Poll)", "type": "main", "index": 0 }]] },
-    "HTTP Request (Veo Poll)": { "main": [[{ "node": "IF Done", "type": "main", "index": 0 }]] },
-    "IF Done": {
+    "Cron Trigger (Daily 2am)": {
       "main": [
-        [{ "node": "Download Video", "type": "main", "index": 0 }],
-        [{ "node": "Wait 30s", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Supabase Query (approved+broll)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Download Video": { "main": [[{ "node": "R2 Upload", "type": "main", "index": 0 }]] },
-    "R2 Upload": { "main": [[{ "node": "Supabase Update (broll_url)", "type": "main", "index": 0 }]] }
+    "Supabase Query (approved+broll)": {
+      "main": [
+        [
+          {
+            "node": "Cost Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cost Guard": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request (Veo Submit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request (Veo Submit)": {
+      "main": [
+        [
+          {
+            "node": "Wait 30s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30s": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request (Veo Poll)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request (Veo Poll)": {
+      "main": [
+        [
+          {
+            "node": "IF Done / Poll Counter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Video": {
+      "main": [
+        [
+          {
+            "node": "R2 Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "R2 Upload": {
+      "main": [
+        [
+          {
+            "node": "Prepare Update Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Done / Poll Counter": {
+      "main": [
+        [
+          {
+            "node": "Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 30s",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase Update (error)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Update Fields": {
+      "main": [
+        [
+          {
+            "node": "Supabase Update (broll_url)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "settings": {},
   "staticData": null,
-  "tags": ["reels-automation"],
+  "tags": [
+    "reels-automation"
+  ],
   "triggerCount": 1,
   "updatedAt": "2026-04-18T00:00:00.000Z",
   "versionId": "1"

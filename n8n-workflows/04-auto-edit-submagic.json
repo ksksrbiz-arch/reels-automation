@@ -5,14 +5,17 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "04-auto-edit",
-        "responseMode": "responseNode",
+        "responseMode": "onReceived",
         "options": {}
       },
       "id": "webhook-trigger",
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -23,8 +26,16 @@
       "name": "Fetch Reel Row",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [200, 0],
-      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+      "position": [
+        200,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-cred",
+          "name": "Supabase API"
+        }
+      }
     },
     {
       "parameters": {
@@ -42,7 +53,10 @@
       "name": "IF: Needs Recording",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [400, 0]
+      "position": [
+        400,
+        0
+      ]
     },
     {
       "parameters": {
@@ -52,7 +66,10 @@
       "name": "Use Raw Clip",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [600, -100]
+      "position": [
+        600,
+        -100
+      ]
     },
     {
       "parameters": {
@@ -62,7 +79,10 @@
       "name": "Use B-roll",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [600, 100]
+      "position": [
+        600,
+        100
+      ]
     },
     {
       "parameters": {
@@ -71,8 +91,14 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer {{ $env.SUBMAGIC_API_KEY }}" },
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SUBMAGIC_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
@@ -83,22 +109,37 @@
           "template": "bold-white",
           "auto_cut": true
         },
-        "options": { "response": { "response": { "neverError": false } } }
+        "options": {
+          "response": {
+            "response": {
+              "neverError": false
+            }
+          }
+        }
       },
       "id": "submagic-submit",
       "name": "Submagic Submit",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [800, 0],
+      "position": [
+        800,
+        0
+      ],
       "onError": "continueErrorOutput"
     },
     {
-      "parameters": { "amount": 60, "unit": "seconds" },
+      "parameters": {
+        "amount": 60,
+        "unit": "seconds"
+      },
       "id": "wait-submagic",
       "name": "Wait 60s",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1000, -50]
+      "position": [
+        1000,
+        -50
+      ]
     },
     {
       "parameters": {
@@ -107,7 +148,10 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer {{ $env.SUBMAGIC_API_KEY }}" }
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SUBMAGIC_API_KEY }}"
+            }
           ]
         }
       },
@@ -115,7 +159,10 @@
       "name": "Submagic Poll",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1200, -50],
+      "position": [
+        1200,
+        -50
+      ],
       "onError": "continueErrorOutput"
     },
     {
@@ -126,7 +173,10 @@
       "name": "Branch Submagic Status",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1400, -50]
+      "position": [
+        1400,
+        -50
+      ]
     },
     {
       "parameters": {
@@ -138,37 +188,61 @@
       "name": "Download Final Video",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1600, -150]
+      "position": [
+        1600,
+        -150
+      ]
     },
     {
       "parameters": {
-        "url": "=https://{{ $env.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com/{{ $env.R2_BUCKET }}/final/{{ $('Fetch Reel Row').item.json.id }}.mp4",
-        "method": "PUT",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [{ "name": "content-type", "value": "video/mp4" }]
-        },
-        "sendBody": true,
-        "bodyContentType": "binaryData",
-        "inputDataFieldName": "data"
+        "operation": "upload",
+        "bucketName": "={{ $env.R2_BUCKET }}",
+        "fileName": "=final/{{ $('Fetch Reel Row').item.json.id }}.mp4",
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "contentType": "video/mp4"
+        }
       },
       "id": "r2-upload-final",
       "name": "R2 Upload Final",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1800, -150]
+      "type": "n8n-nodes-base.awsS3",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        -150
+      ],
+      "credentials": {
+        "aws": {
+          "id": "r2-cred",
+          "name": "Cloudflare R2"
+        }
+      }
     },
     {
       "parameters": {
         "operation": "update",
         "schema": "public",
         "table": "reels_queue",
-        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $('Fetch Reel Row').item.json.id }}" }] },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Fetch Reel Row').item.json.id }}"
+            }
+          ]
+        },
         "fieldsToSend": "defineBelow",
         "dataToSend": {
           "values": [
-            { "fieldId": "final_reel_url", "fieldValue": "={{ $env.R2_PUBLIC_BASE_URL }}/final/{{ $('Fetch Reel Row').item.json.id }}.mp4" },
-            { "fieldId": "status", "fieldValue": "ready" }
+            {
+              "fieldId": "final_reel_url",
+              "fieldValue": "={{ $env.R2_PUBLIC_BASE_URL }}/final/{{ $('Fetch Reel Row').item.json.id }}.mp4"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "ready"
+            }
           ]
         }
       },
@@ -176,8 +250,16 @@
       "name": "Supabase Update (ready)",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [2000, -150],
-      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+      "position": [
+        2000,
+        -150
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-cred",
+          "name": "Supabase API"
+        }
+      }
     },
     {
       "parameters": {
@@ -193,7 +275,10 @@
       "name": "Notify Ready",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2200, -150]
+      "position": [
+        2200,
+        -150
+      ]
     },
     {
       "parameters": {
@@ -203,7 +288,10 @@
       "name": "FFmpeg Fallback (burn text)",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [1600, 150]
+      "position": [
+        1600,
+        150
+      ]
     },
     {
       "parameters": {
@@ -214,38 +302,65 @@
       "name": "Read Fallback File",
       "type": "n8n-nodes-base.readBinaryFile",
       "typeVersion": 1,
-      "position": [1800, 150]
+      "position": [
+        1800,
+        150
+      ]
     },
     {
       "parameters": {
-        "url": "=https://{{ $env.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com/{{ $env.R2_BUCKET }}/final/{{ $('Fetch Reel Row').item.json.id }}.mp4",
-        "method": "PUT",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [{ "name": "content-type", "value": "video/mp4" }]
-        },
-        "sendBody": true,
-        "bodyContentType": "binaryData",
-        "inputDataFieldName": "data"
+        "operation": "upload",
+        "bucketName": "={{ $env.R2_BUCKET }}",
+        "fileName": "=final/{{ $('Fetch Reel Row').item.json.id }}.mp4",
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "contentType": "video/mp4"
+        }
       },
       "id": "r2-upload-fallback",
       "name": "R2 Upload Fallback",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [2000, 150]
+      "type": "n8n-nodes-base.awsS3",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        150
+      ],
+      "credentials": {
+        "aws": {
+          "id": "r2-cred",
+          "name": "Cloudflare R2"
+        }
+      }
     },
     {
       "parameters": {
         "operation": "update",
         "schema": "public",
         "table": "reels_queue",
-        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $('Fetch Reel Row').item.json.id }}" }] },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Fetch Reel Row').item.json.id }}"
+            }
+          ]
+        },
         "fieldsToSend": "defineBelow",
         "dataToSend": {
           "values": [
-            { "fieldId": "final_reel_url", "fieldValue": "={{ $env.R2_PUBLIC_BASE_URL }}/final/{{ $('Fetch Reel Row').item.json.id }}.mp4" },
-            { "fieldId": "status", "fieldValue": "ready" },
-            { "fieldId": "notes", "fieldValue": "Edited via FFmpeg fallback (Submagic unavailable)." }
+            {
+              "fieldId": "final_reel_url",
+              "fieldValue": "={{ $env.R2_PUBLIC_BASE_URL }}/final/{{ $('Fetch Reel Row').item.json.id }}.mp4"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "ready"
+            },
+            {
+              "fieldId": "notes",
+              "fieldValue": "Edited via FFmpeg fallback (Submagic unavailable)."
+            }
           ]
         }
       },
@@ -253,8 +368,16 @@
       "name": "Supabase Update (ready, fallback)",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [2200, 150],
-      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+      "position": [
+        2200,
+        150
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-cred",
+          "name": "Supabase API"
+        }
+      }
     },
     {
       "parameters": {
@@ -270,51 +393,230 @@
       "name": "Notify Fallback",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2400, 150]
+      "position": [
+        2400,
+        150
+      ]
     }
   ],
   "connections": {
-    "Webhook Trigger": { "main": [[{ "node": "Fetch Reel Row", "type": "main", "index": 0 }]] },
-    "Fetch Reel Row": { "main": [[{ "node": "IF: Needs Recording", "type": "main", "index": 0 }]] },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Reel Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Reel Row": {
+      "main": [
+        [
+          {
+            "node": "IF: Needs Recording",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "IF: Needs Recording": {
       "main": [
-        [{ "node": "Use Raw Clip", "type": "main", "index": 0 }],
-        [{ "node": "Use B-roll", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Use Raw Clip",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Use B-roll",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Use Raw Clip": { "main": [[{ "node": "Submagic Submit", "type": "main", "index": 0 }]] },
-    "Use B-roll": { "main": [[{ "node": "Submagic Submit", "type": "main", "index": 0 }]] },
+    "Use Raw Clip": {
+      "main": [
+        [
+          {
+            "node": "Submagic Submit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use B-roll": {
+      "main": [
+        [
+          {
+            "node": "Submagic Submit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Submagic Submit": {
       "main": [
-        [{ "node": "Wait 60s", "type": "main", "index": 0 }],
-        [{ "node": "FFmpeg Fallback (burn text)", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Wait 60s",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "FFmpeg Fallback (burn text)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Wait 60s": { "main": [[{ "node": "Submagic Poll", "type": "main", "index": 0 }]] },
+    "Wait 60s": {
+      "main": [
+        [
+          {
+            "node": "Submagic Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Submagic Poll": {
       "main": [
-        [{ "node": "Branch Submagic Status", "type": "main", "index": 0 }],
-        [{ "node": "FFmpeg Fallback (burn text)", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Branch Submagic Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "FFmpeg Fallback (burn text)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Branch Submagic Status": {
       "main": [
-        [{ "node": "Download Final Video", "type": "main", "index": 0 }],
-        [{ "node": "Wait 60s", "type": "main", "index": 0 }],
-        [{ "node": "FFmpeg Fallback (burn text)", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Download Final Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 60s",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "FFmpeg Fallback (burn text)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Download Final Video": { "main": [[{ "node": "R2 Upload Final", "type": "main", "index": 0 }]] },
-    "R2 Upload Final": { "main": [[{ "node": "Supabase Update (ready)", "type": "main", "index": 0 }]] },
-    "Supabase Update (ready)": { "main": [[{ "node": "Notify Ready", "type": "main", "index": 0 }]] },
-    "FFmpeg Fallback (burn text)": { "main": [[{ "node": "Read Fallback File", "type": "main", "index": 0 }]] },
-    "Read Fallback File": { "main": [[{ "node": "R2 Upload Fallback", "type": "main", "index": 0 }]] },
-    "R2 Upload Fallback": { "main": [[{ "node": "Supabase Update (ready, fallback)", "type": "main", "index": 0 }]] },
-    "Supabase Update (ready, fallback)": { "main": [[{ "node": "Notify Fallback", "type": "main", "index": 0 }]] }
+    "Download Final Video": {
+      "main": [
+        [
+          {
+            "node": "R2 Upload Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "R2 Upload Final": {
+      "main": [
+        [
+          {
+            "node": "Supabase Update (ready)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Update (ready)": {
+      "main": [
+        [
+          {
+            "node": "Notify Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FFmpeg Fallback (burn text)": {
+      "main": [
+        [
+          {
+            "node": "Read Fallback File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Fallback File": {
+      "main": [
+        [
+          {
+            "node": "R2 Upload Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "R2 Upload Fallback": {
+      "main": [
+        [
+          {
+            "node": "Supabase Update (ready, fallback)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Update (ready, fallback)": {
+      "main": [
+        [
+          {
+            "node": "Notify Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "settings": {},
   "staticData": null,
-  "tags": ["reels-automation"],
+  "tags": [
+    "reels-automation"
+  ],
   "triggerCount": 0,
   "updatedAt": "2026-04-18T00:00:00.000Z",
   "versionId": "2"

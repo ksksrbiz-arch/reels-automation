@@ -4,14 +4,22 @@
     {
       "parameters": {
         "rule": {
-          "interval": [{ "field": "cronExpression", "expression": "0 3 * * 0" }]
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * 0"
+            }
+          ]
         }
       },
       "id": "cron-trigger",
       "name": "Cron Trigger (Sun 3am)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -22,8 +30,16 @@
       "name": "Load Current Token",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [200, 0],
-      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+      "position": [
+        200,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-cred",
+          "name": "Supabase API"
+        }
+      }
     },
     {
       "parameters": {
@@ -32,8 +48,14 @@
         "sendQueryParameters": true,
         "queryParameters": {
           "parameters": [
-            { "name": "grant_type", "value": "ig_refresh_token" },
-            { "name": "access_token", "value": "={{ $json.token }}" }
+            {
+              "name": "grant_type",
+              "value": "ig_refresh_token"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $json.token }}"
+            }
           ]
         }
       },
@@ -41,7 +63,11 @@
       "name": "Refresh IG Token",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [400, 0]
+      "position": [
+        400,
+        0
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -51,7 +77,10 @@
       "name": "Parse Token Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [600, 0]
+      "position": [
+        600,
+        0
+      ]
     },
     {
       "parameters": {
@@ -62,10 +91,22 @@
         "dataToSend": "defineBelow",
         "fieldsToSend": {
           "values": [
-            { "fieldId": "id", "fieldValue": "ig_long_lived" },
-            { "fieldId": "token", "fieldValue": "={{ $json.new_token }}" },
-            { "fieldId": "refreshed_at", "fieldValue": "={{ $now.toISOString() }}" },
-            { "fieldId": "expires_at", "fieldValue": "={{ $json.expires_at }}" }
+            {
+              "fieldId": "id",
+              "fieldValue": "ig_long_lived"
+            },
+            {
+              "fieldId": "token",
+              "fieldValue": "={{ $json.new_token }}"
+            },
+            {
+              "fieldId": "refreshed_at",
+              "fieldValue": "={{ $now.toISOString() }}"
+            },
+            {
+              "fieldId": "expires_at",
+              "fieldValue": "={{ $json.expires_at }}"
+            }
           ]
         }
       },
@@ -73,8 +114,16 @@
       "name": "Update Token in Supabase",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [800, 0],
-      "credentials": { "supabaseApi": { "id": "supabase-cred", "name": "Supabase API" } }
+      "position": [
+        800,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-cred",
+          "name": "Supabase API"
+        }
+      }
     },
     {
       "parameters": {
@@ -90,7 +139,10 @@
       "name": "Notify Success",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1000, 0]
+      "position": [
+        1000,
+        0
+      ]
     },
     {
       "parameters": {
@@ -106,19 +158,83 @@
       "name": "Alert: Refresh Failed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [600, 200]
+      "position": [
+        600,
+        200
+      ]
     }
   ],
   "connections": {
-    "Cron Trigger (Sun 3am)": { "main": [[{ "node": "Load Current Token", "type": "main", "index": 0 }]] },
-    "Load Current Token": { "main": [[{ "node": "Refresh IG Token", "type": "main", "index": 0 }]] },
-    "Refresh IG Token": { "main": [[{ "node": "Parse Token Response", "type": "main", "index": 0 }]] },
-    "Parse Token Response": { "main": [[{ "node": "Update Token in Supabase", "type": "main", "index": 0 }]] },
-    "Update Token in Supabase": { "main": [[{ "node": "Notify Success", "type": "main", "index": 0 }]] }
+    "Cron Trigger (Sun 3am)": {
+      "main": [
+        [
+          {
+            "node": "Load Current Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Current Token": {
+      "main": [
+        [
+          {
+            "node": "Refresh IG Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh IG Token": {
+      "main": [
+        [
+          {
+            "node": "Parse Token Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert: Refresh Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Token Response": {
+      "main": [
+        [
+          {
+            "node": "Update Token in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Token in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Notify Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "errorWorkflow": "alert-failure" },
+  "settings": {
+    "errorWorkflow": "alert-failure"
+  },
   "staticData": null,
-  "tags": ["reels-automation"],
+  "tags": [
+    "reels-automation"
+  ],
   "triggerCount": 1,
   "updatedAt": "2026-04-18T00:00:00.000Z",
   "versionId": "1"

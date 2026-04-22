@@ -67,7 +67,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extract JSON array from Claude response\nconst text = $input.first().json.content[0].text;\n// Strip markdown fences if present\nconst cleaned = text.replace(/^```json\\n?|^```\\n?|```$/gm, '').trim();\nconst concepts = JSON.parse(cleaned);\nif (!Array.isArray(concepts) || concepts.length !== 14) {\n  throw new Error(`Expected 14 concepts, got ${Array.isArray(concepts) ? concepts.length : 'non-array'}`);\n}\nreturn concepts.map(c => ({ json: c }));"
+        "jsCode": "// Extract JSON array from Claude response\nconst text = $input.first().json.content[0].text;\n// Strip markdown fences if present\nconst cleaned = text.replace(/^```json\\n?|^```\\n?|```$/gm, '').trim();\nconst concepts = JSON.parse(cleaned);\nif (!Array.isArray(concepts) || concepts.length !== 14) {\n  throw new Error(`Expected 14 concepts, got ${Array.isArray(concepts) ? concepts.length : 'non-array'}`);\n}\n// Embed index so Schedule Calculator can use it even inside Split In Batches\nreturn concepts.map((c, index) => ({ json: { ...c, _idx: index } }));"
       },
       "id": "parse-concepts",
       "name": "Code (parse JSON)",
@@ -94,7 +94,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Assign scheduled_for: 2/day × 7 days, staggered 11am & 6pm PT (UTC-7)\n// Day 0 = Monday (next day after Sunday cron)\nconst item = $input.first().json;\nconst idx = $itemIndex; // 0-13\nconst dayOffset = Math.floor(idx / 2) + 1; // days from today (Mon-Sun)\nconst slotHour = idx % 2 === 0 ? 18 : 1;    // 11am PT = 18:00 UTC, 6pm PT = 01:00 UTC next day\nconst base = new Date();\nbase.setUTCDate(base.getUTCDate() + dayOffset);\nbase.setUTCHours(slotHour, 0, 0, 0);\nconst status = ['build_in_public', 'trades_to_tech'].includes(item.pillar) ? 'recording_needed' : 'draft';\nreturn [{ json: { ...item, scheduled_for: base.toISOString(), status } }];"
+        "jsCode": "// Assign scheduled_for: 2/day × 7 days, staggered 11am & 6pm PT (UTC-7)\n// Day 0 = Monday (next day after Sunday cron)\nconst item = $input.first().json;\nconst idx = item._idx ?? $itemIndex; // prefer embedded index; fallback to $itemIndex\nconst dayOffset = Math.floor(idx / 2) + 1; // days from today (Mon-Sun)\nconst slotHour = idx % 2 === 0 ? 18 : 1;    // 11am PT = 18:00 UTC, 6pm PT = 01:00 UTC next day\nconst base = new Date();\nbase.setUTCDate(base.getUTCDate() + dayOffset);\nbase.setUTCHours(slotHour, 0, 0, 0);\nconst status = ['build_in_public', 'trades_to_tech'].includes(item.pillar) ? 'recording_needed' : 'draft';\n// Remove internal tracking field before inserting\nconst { _idx, ...concept } = item;\nreturn [{ json: { ...concept, scheduled_for: base.toISOString(), status } }];"
       },
       "id": "schedule-calc",
       "name": "Schedule Calculator",

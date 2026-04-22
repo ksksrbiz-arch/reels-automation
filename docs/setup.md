@@ -17,7 +17,7 @@ This guide walks through the one-time setup steps required before the pipeline r
 | 7 | Create Cloudflare R2 bucket `reels-media` + R2 API token + custom domain `media.1commerce.online` with public access enabled (IG requires public HTTPS URLs, not signed/private) | Cloudflare dash | 15 min |
 | 8 | Create Submagic account + API key (optional, $16/mo) | submagic.co | 5 min |
 | 9 | Confirm n8n running on Contabo w/ HTTPS webhook URL | Contabo SSH | verify |
-| 10 | Create Google Drive folder `1commerce-reels-inbox` + service account. **Explicitly share the folder** with the service account email — inherited permissions do NOT work. | Google Cloud Console | 15 min |
+| 10 | Create Google Drive folder `1commerce-reels-inbox` + service account. **Explicitly share the folder** with the service account email — inherited permissions do NOT work. Also create an `unmatched` sub-folder inside it and share it the same way. | Google Cloud Console | 15 min |
 
 ---
 
@@ -91,6 +91,8 @@ Or use the Supabase dashboard Table Editor.
 
 4. Set environment variables in n8n Settings → Environment Variables:
    - `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_PUBLIC_BASE_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `SUBMAGIC_API_KEY`, `IG_BUSINESS_ACCOUNT_ID`, `ALERT_WEBHOOK_URL`, `VEO_MONTHLY_LIMIT`
+   - `GDRIVE_INBOX_FOLDER_ID`: the Google Drive folder ID for the recording inbox
+   - `GDRIVE_UNMATCHED_FOLDER_ID`: the Drive folder ID for clips that can't be matched to a reel (create a sub-folder called `unmatched` inside the inbox, then paste its folder ID here)
    - `N8N_WEBHOOK_URL_04_EDIT`: after activating `04-auto-edit-submagic`, open that workflow, click the **Webhook Trigger** node, copy the Production URL, and set it here. Then set the same value in your server `.env` file.
 5. Activate all 7 workflows
 
